@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Rentage",
+    "slug": "rentage",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563eb"
+    },
+    "scheme": "rentage",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "in.rentage.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2563eb"
+      },
+      "package": "in.rentage.app"
+    },
+    "plugins": ["expo-router", "expo-secure-store"]
+  }
+}

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rentage - Rent Anything, Anywhere | India's Rental Marketplace</title>
+    <meta name="description" content="Rentage is India's first unified rental marketplace. Rent homes, flats, PGs, cars, bikes, electronics, furniture and more. List anything, find renters instantly.">
+    <meta name="keywords" content="rent, rental marketplace, India, homes for rent, car rental, bike rental, furniture rental, electronics rental, PG, flat">
+    <meta property="og:title" content="Rentage - Rent Anything, Anywhere">
+    <meta property="og:description" content="India's first unified rental marketplace. List or find anything for rent - from homes to electronics.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://rentage.in">
+    <link rel="canonical" href="https://rentage.in">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="logo">Rent<span>age</span></div>
+            <p class="badge">India's Rental Marketplace</p>
+            <h1>Rent Anything,<br>Anywhere</h1>
+            <p class="tagline">The one platform to list and discover rentals across India — homes, vehicles, electronics, furniture and more. No middlemen, no hassle.</p>
+
+            <div class="countdown" id="countdown">
+                <div class="countdown-item">
+                    <span class="countdown-value" id="days">00</span>
+                    <span class="countdown-label">Days</span>
+                </div>
+                <div class="countdown-item">
+                    <span class="countdown-value" id="hours">00</span>
+                    <span class="countdown-label">Hours</span>
+                </div>
+                <div class="countdown-item">
+                    <span class="countdown-value" id="minutes">00</span>
+                    <span class="countdown-label">Minutes</span>
+                </div>
+                <div class="countdown-item">
+                    <span class="countdown-value" id="seconds">00</span>
+                    <span class="countdown-label">Seconds</span>
+                </div>
+            </div>
+
+            <div class="notify-section">
+                <h2>Be the first to know when we go live</h2>
+                <form class="notify-form" id="notifyForm">
+                    <input type="email" id="emailInput" placeholder="Enter your email address" required>
+                    <button type="submit">Notify Me</button>
+                </form>
+                <p class="success-msg" id="successMsg">Thank you! We'll notify you when we launch.</p>
+            </div>
+        </div>
+
+        <div class="bg-shapes">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+        </div>
+    </section>
+
+    <!-- Categories Section -->
+    <section class="section categories-section">
+        <div class="section-inner">
+            <p class="section-badge">What You Can Rent</p>
+            <h2 class="section-title">One Marketplace, Endless Categories</h2>
+            <p class="section-desc">Whether you're looking for a new flat, a car for the weekend, or a washing machine for a few months — Rentage has you covered.</p>
+            <div class="categories-grid">
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    </div>
+                    <h3>Homes & Flats</h3>
+                    <p>Apartments, independent houses, villas</p>
+                </div>
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2.7-3.6A2 2 0 0 0 13.7 5H8.3a2 2 0 0 0-1.6.9L4 9.5 1.5 11A2 2 0 0 0 0 13v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+                    </div>
+                    <h3>Cars & Bikes</h3>
+                    <p>Daily, weekly or monthly vehicle rentals</p>
+                </div>
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+                    </div>
+                    <h3>Electronics</h3>
+                    <p>Laptops, projectors, cameras, gaming consoles</p>
+                </div>
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3"/><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v2H6v-2a2 2 0 0 0-4 0Z"/><path d="M4 18v2"/><path d="M20 18v2"/></svg>
+                    </div>
+                    <h3>Furniture</h3>
+                    <p>Beds, sofas, tables, complete room setups</p>
+                </div>
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/><path d="M9 4v4"/><path d="M15 4v4"/><circle cx="12" cy="14" r="2"/></svg>
+                    </div>
+                    <h3>Appliances</h3>
+                    <p>Washing machines, water filters, ACs, fridges</p>
+                </div>
+                <div class="category-card">
+                    <div class="category-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    </div>
+                    <h3>Tools & More</h3>
+                    <p>Equipment, PGs, and many more categories</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section features-section">
+        <div class="section-inner">
+            <p class="section-badge">Why Rentage</p>
+            <h2 class="section-title">Built for Owners & Renters</h2>
+            <p class="section-desc">Everything you need to list, discover, and connect — in one seamless platform.</p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-number">01</div>
+                    <h3>List in Minutes</h3>
+                    <p>Multi-step guided listing with up to 10 photos, location pin, flexible pricing — hourly, daily, weekly, monthly or yearly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-number">02</div>
+                    <h3>Smart Search & Filters</h3>
+                    <p>Find what you need by category, city, price range, and rent period. Map-based discovery with nearby listings.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-number">03</div>
+                    <h3>Real-Time Chat</h3>
+                    <p>Message owners directly within the app. No need to share personal numbers — chat is built right in.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-number">04</div>
+                    <h3>Verified Contacts</h3>
+                    <p>Phone numbers are hidden by default. Use credits to reveal contacts — keeping spam away from both sides.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-number">05</div>
+                    <h3>Save & Compare</h3>
+                    <p>Shortlist your favourite listings, compare options, and get back to them anytime from your saved collection.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-number">06</div>
+                    <h3>Available on Web & Mobile</h3>
+                    <p>Use Rentage on your browser or download the app. Your listings, chats, and saves sync across all devices.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="section pricing-section">
+        <div class="section-inner">
+            <p class="section-badge">Simple Pricing</p>
+            <h2 class="section-title">Plans That Grow With You</h2>
+            <p class="section-desc">Start free. Upgrade when you need more listings and unlimited contacts.</p>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Free</h3>
+                        <div class="pricing-amount"><span class="currency">&#8377;</span>0<span class="period">/mo</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>Up to 3 active listings</li>
+                        <li>5 contact reveals / month</li>
+                        <li>In-app chat</li>
+                        <li>Basic search access</li>
+                    </ul>
+                    <div class="pricing-cta">Perfect to get started</div>
+                </div>
+                <div class="pricing-card popular">
+                    <div class="popular-badge">Most Popular</div>
+                    <div class="pricing-header">
+                        <h3>Basic</h3>
+                        <div class="pricing-amount"><span class="currency">&#8377;</span>199<span class="period">/mo</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>Up to 15 active listings</li>
+                        <li>30 contact reveals / month</li>
+                        <li>Priority support</li>
+                        <li>All Free features</li>
+                    </ul>
+                    <div class="pricing-cta">Best for regular owners</div>
+                </div>
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Pro</h3>
+                        <div class="pricing-amount"><span class="currency">&#8377;</span>499<span class="period">/mo</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>Unlimited listings</li>
+                        <li>Unlimited contact reveals</li>
+                        <li>Featured badge on listings</li>
+                        <li>Priority in search results</li>
+                    </ul>
+                    <div class="pricing-cta">For power users & agents</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="section how-section">
+        <div class="section-inner">
+            <p class="section-badge">How It Works</p>
+            <h2 class="section-title">3 Simple Steps</h2>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3>Sign Up Free</h3>
+                    <p>Create your account as an Owner or Renter using email, Google, or phone OTP.</p>
+                </div>
+                <div class="step-arrow">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3>List or Browse</h3>
+                    <p>Owners list assets with photos and pricing. Renters search by location, category and budget.</p>
+                </div>
+                <div class="step-arrow">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3>Connect & Rent</h3>
+                    <p>Chat with owners, reveal contact details, and finalise your rental — all within the platform.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section class="section cta-section">
+        <div class="section-inner">
+            <div class="cta-box">
+                <h2>Ready to Rent Smarter?</h2>
+                <p>Join thousands of early adopters. Be the first to list or find rentals on India's newest rental marketplace.</p>
+                <form class="notify-form" id="notifyForm2">
+                    <input type="email" id="emailInput2" placeholder="Enter your email address" required>
+                    <button type="submit">Join the Waitlist</button>
+                </form>
+                <p class="success-msg" id="successMsg2">You're on the list! We'll reach out soon.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <div class="logo logo-sm">Rent<span>age</span></div>
+                <p>Rent Anything, Anywhere.</p>
+            </div>
+            <div class="social-links">
+                <a href="#" aria-label="Twitter">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
+                </a>
+                <a href="#" aria-label="Instagram">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                </a>
+                <a href="#" aria-label="LinkedIn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                </a>
+                <a href="#" aria-label="Facebook">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                </a>
+            </div>
+            <div class="footer-links">
+                <a href="mailto:support@rentage.in">support@rentage.in</a>
+            </div>
+            <p class="copyright">&copy; 2026 Rentage. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
