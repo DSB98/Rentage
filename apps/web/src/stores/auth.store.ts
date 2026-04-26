@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { IUserWithProfile } from '@rentage/shared-types';
 import api from '@/lib/api';
 
+const unwrap = <T = any>(payload: any): T => {
+  if (payload && typeof payload === 'object' && 'data' in payload && 'success' in payload) {
+    return payload.data as T;
+  }
+  return payload as T;
+};
+
 interface AuthState {
   user: IUserWithProfile | null;
   isLoading: boolean;
@@ -21,7 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    const { user, tokens } = data;
+    const { user, tokens } = unwrap<{ user: IUserWithProfile; tokens: { accessToken: string; refreshToken: string } }>(data);
     localStorage.setItem('accessToken', tokens.accessToken);
     localStorage.setItem('refreshToken', tokens.refreshToken);
     set({ user, isAuthenticated: true, isLoading: false });
@@ -29,7 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   register: async (registerData) => {
     const { data } = await api.post('/auth/register', registerData);
-    const { user, tokens } = data;
+    const { user, tokens } = unwrap<{ user: IUserWithProfile; tokens: { accessToken: string; refreshToken: string } }>(data);
     localStorage.setItem('accessToken', tokens.accessToken);
     localStorage.setItem('refreshToken', tokens.refreshToken);
     set({ user, isAuthenticated: true, isLoading: false });
@@ -55,7 +62,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
       const { data } = await api.get('/auth/me');
-      set({ user: data, isAuthenticated: true, isLoading: false });
+      const user = unwrap<IUserWithProfile>(data);
+      set({ user, isAuthenticated: true, isLoading: false });
     } catch {
       set({ user: null, isAuthenticated: false, isLoading: false });
     }

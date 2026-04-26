@@ -54,7 +54,7 @@ export default function AdminCategoriesPage() {
       resetForm();
       fetchCategories();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save category');
+      (globalThis as any)?.alert?.(err.response?.data?.message || 'Failed to save category');
     } finally {
       setFormLoading(false);
     }
@@ -77,21 +77,21 @@ export default function AdminCategoriesPage() {
       await api.patch(`/admin/categories/${cat.id}`, { isActive: !cat.isActive });
       fetchCategories();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update category');
+      (globalThis as any)?.alert?.(err.response?.data?.message || 'Failed to update category');
     }
   };
 
   const deleteCategory = async (cat: Category) => {
     if (cat._count.listings > 0) {
-      alert(`Cannot delete "${cat.name}" — it has ${cat._count.listings} listings. Reassign them first.`);
+      (globalThis as any)?.alert?.(`Cannot delete "${cat.name}" — it has ${cat._count.listings} listings. Reassign them first.`);
       return;
     }
-    if (!confirm(`Delete "${cat.name}"? This cannot be undone.`)) return;
+    if (!(globalThis as any)?.confirm?.(`Delete "${cat.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/admin/categories/${cat.id}`);
       fetchCategories();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to delete category');
+      (globalThis as any)?.alert?.(err.response?.data?.message || 'Failed to delete category');
     }
   };
 
@@ -136,7 +136,7 @@ export default function AdminCategoriesPage() {
               <label className="mb-1 block text-xs font-medium text-slate-600">Name *</label>
               <input
                 value={form.name}
-                onChange={(e) => handleNameChange(e.target.value)}
+                onChange={(e: any) => handleNameChange(e.target.value)}
                 required
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -145,7 +145,7 @@ export default function AdminCategoriesPage() {
               <label className="mb-1 block text-xs font-medium text-slate-600">Slug *</label>
               <input
                 value={form.slug}
-                onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+                onChange={(e: any) => setForm((f) => ({ ...f, slug: e.target.value }))}
                 required
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -154,7 +154,7 @@ export default function AdminCategoriesPage() {
               <label className="mb-1 block text-xs font-medium text-slate-600">Icon (emoji)</label>
               <input
                 value={form.icon}
-                onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+                onChange={(e: any) => setForm((f) => ({ ...f, icon: e.target.value }))}
                 placeholder="e.g. 🏠"
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -163,7 +163,7 @@ export default function AdminCategoriesPage() {
               <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
               <input
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                onChange={(e: any) => setForm((f) => ({ ...f, description: e.target.value }))}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
@@ -172,7 +172,7 @@ export default function AdminCategoriesPage() {
               <input
                 type="number"
                 value={form.sortOrder}
-                onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                onChange={(e: any) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>

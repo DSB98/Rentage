@@ -16,17 +16,17 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 const CATEGORY_GRADIENTS: Record<string, string> = {
-  homes: 'from-blue-50 to-blue-100/50',
-  flats: 'from-violet-50 to-violet-100/50',
-  pgs: 'from-pink-50 to-pink-100/50',
-  cars: 'from-emerald-50 to-emerald-100/50',
-  bikes: 'from-orange-50 to-orange-100/50',
-  'washing-machines': 'from-cyan-50 to-cyan-100/50',
-  'water-filters': 'from-sky-50 to-sky-100/50',
-  electronics: 'from-indigo-50 to-indigo-100/50',
-  furniture: 'from-amber-50 to-amber-100/50',
-  'tools-equipment': 'from-slate-50 to-slate-100/50',
-  others: 'from-gray-50 to-gray-100/50',
+  homes: 'from-amber-50 to-yellow-100/70',
+  flats: 'from-rose-50 to-amber-100/70',
+  pgs: 'from-orange-50 to-yellow-100/70',
+  cars: 'from-lime-50 to-amber-100/70',
+  bikes: 'from-yellow-50 to-orange-100/70',
+  'washing-machines': 'from-cyan-50 to-amber-100/60',
+  'water-filters': 'from-sky-50 to-yellow-100/60',
+  electronics: 'from-indigo-50 to-amber-100/60',
+  furniture: 'from-amber-50 to-orange-100/70',
+  'tools-equipment': 'from-stone-50 to-yellow-100/60',
+  others: 'from-slate-50 to-amber-100/60',
 };
 
 interface Category {
@@ -44,6 +44,8 @@ const STATS = [
   { value: '11', label: 'Categories', icon: '📂' },
 ];
 
+const DEFAULT_HERO_BANNERS = ['/banners/banner.png', '/banners/banner2.png'];
+
 export default function HomePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,6 +53,8 @@ export default function HomePage() {
   const [recentListings, setRecentListings] = useState<any[]>([]);
   const [featuredListings, setFeaturedListings] = useState<any[]>([]);
   const [loadingListings, setLoadingListings] = useState(true);
+  const [heroBanners, setHeroBanners] = useState<string[]>(DEFAULT_HERO_BANNERS);
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
 
   useEffect(() => {
     // Fetch categories
@@ -69,7 +73,31 @@ export default function HomePage() {
       const result = data.data || data;
       setFeaturedListings(result.items || result || []);
     }).catch(() => {});
+
+    // Fetch active hero banners (fallback to defaults if empty)
+    api.get('/banners').then(({ data }) => {
+      const banners = (Array.isArray(data) ? data : [])
+        .map((banner: any) => banner?.imageUrl)
+        .filter((url: any) => typeof url === 'string' && url.trim().length > 0);
+
+      if (banners.length > 0) {
+        setHeroBanners(banners);
+      }
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (heroBanners.length <= 1) {
+      setActiveBannerIndex(0);
+      return;
+    }
+
+    const intervalId = globalThis.setInterval(() => {
+      setActiveBannerIndex((current) => (current + 1) % heroBanners.length);
+    }, 6500);
+
+    return () => globalThis.clearInterval(intervalId);
+  }, [heroBanners]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,13 +109,23 @@ export default function HomePage() {
       <Header />
 
       {/* ───── HERO ───── */}
-      <section className="relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-accent-50/30" />
-        <div className="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-100/40 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-accent-100/30 blur-3xl" />
+      <section className="relative min-h-[620px] overflow-hidden sm:min-h-[680px]">
+        <div className="absolute inset-0">
+          {heroBanners.map((banner, index) => (
+            <div
+              key={`${banner}-${index}`}
+              className={`absolute inset-0 bg-contain bg-top bg-no-repeat transition-opacity duration-[1800ms] sm:bg-cover sm:bg-[position:72%_center] ${
+                activeBannerIndex === index ? 'opacity-100' : 'opacity-0'
+              }`}
+              style={{ backgroundImage: `url(${banner})` }}
+            />
+          ))}
+        </div>
+        <div className="absolute inset-0 bg-white/10 sm:bg-white/30" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),rgba(255,255,255,0.16)_52%,rgba(255,248,235,0.28)_100%)] sm:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(255,255,255,0.30)_52%,rgba(255,248,235,0.50)_100%)]" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/25 to-transparent sm:h-28 sm:from-white/50" />
 
-        <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 sm:pb-28 sm:pt-24">
+        <div className="relative w-full px-4 pb-16 pt-12 sm:px-6 sm:pb-28 sm:pt-24 lg:px-10">
           <div className="mx-auto max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-1.5 text-sm font-medium text-primary-700">
               <span className="relative flex h-2 w-2">
@@ -97,18 +135,18 @@ export default function HomePage() {
               India&apos;s Rental Marketplace
             </div>
 
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
               Rent Anything,{' '}
               <span className="gradient-text">Anywhere</span>
             </h1>
 
-            <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-surface-500">
+            <p className="mx-auto mt-5 max-w-xl rounded-xl bg-white/72 px-3 py-2 text-base leading-relaxed text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.06)] sm:mt-6 sm:bg-transparent sm:px-0 sm:py-0 sm:text-lg sm:text-surface-500 sm:shadow-none">
               From homes to bikes, appliances to electronics — find what you need or list what you own.
               Join thousands of renters and owners across India.
             </p>
 
             {/* Search */}
-            <form onSubmit={handleSearch} className="mx-auto mt-10 flex max-w-2xl gap-3">
+            <form onSubmit={handleSearch} className="mx-auto mt-8 flex max-w-2xl flex-col gap-3 sm:mt-10 sm:flex-row">
               <div className="relative flex-1">
                 <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-surface-300" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -116,12 +154,12 @@ export default function HomePage() {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e: any) => setSearchQuery(e.target.value)}
                   placeholder="What are you looking to rent?"
                   className="input-lg pl-12 shadow-card"
                 />
               </div>
-              <button type="submit" className="btn-primary px-8 py-3.5 text-base shadow-md">
+              <button type="submit" className="btn-primary px-8 py-3.5 text-base shadow-md sm:w-auto">
                 Search
               </button>
             </form>
@@ -138,13 +176,29 @@ export default function HomePage() {
                 </Link>
               ))}
             </div>
+
+            <div className="mt-8 overflow-hidden rounded-2xl border border-primary-200/70 bg-white/80 p-4 shadow-card">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-primary-900">Browse Fast</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+                {['Homes', 'Flats', 'PGs', 'Cars', 'Bikes', 'Electronics', 'Furniture', 'Appliances'].map((item) => (
+                  <Link
+                    key={item}
+                    href={`/listings?q=${item}`}
+                    className="rounded-lg bg-primary-50 px-3 py-2 text-center text-xs font-semibold text-primary-900 transition-colors hover:bg-primary-100"
+                  >
+                    {item}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
 
       {/* ───── STATS BAR ───── */}
       <section className="relative -mt-8 z-10">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="w-full px-4 sm:px-6 lg:px-10">
           <div className="grid grid-cols-2 gap-4 rounded-2xl border border-surface-200/60 bg-white p-6 shadow-elevated sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-surface-100">
             {STATS.map((stat) => (
               <div key={stat.label} className="text-center">
@@ -158,16 +212,16 @@ export default function HomePage() {
 
       {/* ───── CATEGORIES ───── */}
       <section className="section">
-        <div className="mx-auto max-w-7xl">
+        <div className="w-full">
           <div className="text-center">
             <h2 className="section-heading">Browse by Category</h2>
             <p className="section-subheading">Find exactly what you need from 11 different categories</p>
           </div>
-          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
             {categories.map((cat) => (
               <Link
                 key={cat.id}
-                href={`/listings?category=${cat.id}`}
+                href={`/listings?category=${cat.slug}`}
                 className={`group flex flex-col items-center gap-3 rounded-2xl bg-gradient-to-br ${CATEGORY_GRADIENTS[cat.slug] || 'from-gray-50 to-gray-100/50'} p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover`}
               >
                 <span className="text-4xl transition-transform duration-300 group-hover:scale-110">{CATEGORY_ICONS[cat.slug] || cat.icon || '📦'}</span>
@@ -186,7 +240,7 @@ export default function HomePage() {
 
       {/* ───── RECENT LISTINGS ───── */}
       <section className="section bg-surface-50">
-        <div className="mx-auto max-w-7xl">
+        <div className="w-full">
           <div className="flex items-end justify-between">
             <div>
               <h2 className="section-heading">Recent Listings</h2>
@@ -252,7 +306,7 @@ export default function HomePage() {
 
       {/* ───── HOW IT WORKS ───── */}
       <section className="section bg-white">
-        <div className="mx-auto max-w-7xl">
+        <div className="w-full">
           <div className="text-center">
             <h2 className="section-heading">How It Works</h2>
             <p className="section-subheading">Three simple steps to start renting</p>
@@ -299,7 +353,7 @@ export default function HomePage() {
       </section>
 
       {/* ───── CTA ───── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800">
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMwLTkuOTQtOC4wNi0xOC0xOC0xOCIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDUpIi8+PC9nPjwvc3ZnPg==')] opacity-50" />
         <div className="relative mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-28">
           <h2 className="text-3xl font-bold text-white sm:text-4xl">

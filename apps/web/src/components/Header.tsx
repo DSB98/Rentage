@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth.store';
+import NotificationBell from './NotificationBell';
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated, isLoading, loadUser, logout } = useAuthStore();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,9 +20,9 @@ export default function Header() {
   }, [loadUser]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    const onScroll = () => setScrolled((globalThis as any).scrollY > 10);
+    (globalThis as any).addEventListener('scroll', onScroll, { passive: true });
+    return () => (globalThis as any).removeEventListener('scroll', onScroll);
   }, []);
 
   // Close menus on navigation
@@ -40,6 +42,25 @@ export default function Header() {
     { href: '/listings', label: 'Browse', active: pathname.startsWith('/listings') },
   ];
 
+  const browseCategories = [
+    { label: 'Homes', href: '/listings?category=homes' },
+    { label: 'Flats', href: '/listings?category=flats' },
+    { label: 'PGs', href: '/listings?category=pgs' },
+    { label: 'Cars', href: '/listings?category=cars' },
+    { label: 'Bikes', href: '/listings?category=bikes' },
+    { label: 'Electronics', href: '/listings?category=electronics' },
+    { label: 'Furniture', href: '/listings?category=furniture' },
+    { label: 'Appliances', href: '/listings?category=washing-machines' },
+  ];
+
+  const listingTypeLinks = browseCategories.slice(0, 7);
+  const activeCategory = (searchParams.get('category') || '').toLowerCase();
+
+  const isCategoryLinkActive = (href: string) => {
+    const slug = (href.split('category=')[1] || '').toLowerCase();
+    return pathname.startsWith('/listings') && activeCategory === slug;
+  };
+
   return (
     <>
       <header
@@ -49,7 +70,7 @@ export default function Header() {
             : 'bg-white/95 backdrop-blur-sm'
         }`}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
@@ -64,17 +85,43 @@ export default function Header() {
             </Link>
 
             <nav className="hidden items-center gap-1 md:flex">
-              {navLinks.map((link) => (
+              <div className="group relative">
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  href="/listings"
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    link.active
-                      ? 'bg-primary-50 text-primary-700'
+                    pathname.startsWith('/listings')
+                      ? 'bg-primary-50 text-primary-800'
+                      : 'text-surface-500 hover:bg-primary-50 hover:text-primary-800'
+                  }`}
+                >
+                  Browse
+                </Link>
+                <div className="invisible absolute left-0 top-full z-50 mt-1 w-[460px] rounded-2xl border border-surface-200 bg-white p-4 opacity-0 shadow-elevated transition-all group-hover:visible group-hover:opacity-100">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-surface-400">Popular Categories</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {browseCategories.map((item) => (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        className="rounded-lg bg-surface-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-primary-100 hover:text-primary-900"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {listingTypeLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isCategoryLinkActive(item.href)
+                      ? 'bg-primary-50 text-primary-800'
                       : 'text-surface-500 hover:bg-surface-50 hover:text-slate-900'
                   }`}
                 >
-                  {link.label}
+                  {item.label}
                 </Link>
               ))}
             </nav>
@@ -121,6 +168,8 @@ export default function Header() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
                   </svg>
                 </Link>
+
+                <NotificationBell />
 
                 {/* Profile dropdown */}
                 <div className="relative">
@@ -231,6 +280,24 @@ export default function Header() {
                   + List Item
                 </Link>
               )}
+              <div className="mt-2 rounded-lg border border-surface-200 p-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-surface-400">Browse Categories</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {browseCategories.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`rounded-md px-2.5 py-2 text-xs font-medium ${
+                        isCategoryLinkActive(item.href)
+                          ? 'bg-primary-100 text-primary-900'
+                          : 'bg-surface-50 text-slate-700'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </nav>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -17,11 +17,42 @@ export class UserService {
     return sanitized;
   }
 
-  async updateProfile(userId: string, data: { fullName?: string; phone?: string; bio?: string; city?: string; state?: string }) {
+  async updateProfile(
+    userId: string,
+    data: {
+      fullName?: string;
+      phone?: string;
+      bio?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+      pincode?: string;
+      gender?: string;
+      avatarUrl?: string;
+      dob?: string | null;
+    },
+  ) {
+    let parsedDob: Date | null | undefined = undefined;
+    if (data.dob === null) {
+      parsedDob = null;
+    } else if (typeof data.dob === 'string' && data.dob.trim()) {
+      const maybeDate = new Date(data.dob);
+      if (Number.isNaN(maybeDate.getTime())) {
+        throw new BadRequestException('Invalid dob format');
+      }
+      parsedDob = maybeDate;
+    }
+
+    const { dob, ...rest } = data;
+    const profileData = {
+      ...rest,
+      ...(parsedDob !== undefined ? { dob: parsedDob } : {}),
+    };
+
     return this.prisma.userProfile.upsert({
       where: { userId },
-      update: data,
-      create: { userId, fullName: data.fullName || 'User', ...data },
+      update: profileData,
+      create: { userId, fullName: data.fullName || 'User', ...profileData },
     });
   }
 

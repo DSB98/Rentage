@@ -5,6 +5,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ListingService } from './listing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { UserRole } from '@rentage/shared-types';
@@ -23,6 +24,8 @@ export class ListingController {
     @Query('categoryId') categoryId?: string,
     @Query('city') city?: string,
     @Query('state') state?: string,
+    @Query('nearListingId') nearListingId?: string,
+    @Query('excludeId') excludeId?: string,
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('rentPeriod') rentPeriod?: string,
@@ -32,7 +35,12 @@ export class ListingController {
     @Query('limit') limit?: string,
   ) {
     return this.listingService.search({
-      query, categoryId, city, state,
+      query,
+      categoryId,
+      city,
+      state,
+      nearListingId,
+      excludeId,
       minPrice: minPrice ? parseFloat(minPrice) : undefined,
       maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
       rentPeriod, sort, cursor,
@@ -43,7 +51,7 @@ export class ListingController {
 
   @Get('owner/my-listings')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get my listings (owner)' })
   async getMyListings(@CurrentUser('id') userId: string, @Query('status') status?: string) {
@@ -70,16 +78,21 @@ export class ListingController {
   // ─── PARAMETERIZED ROUTES ─────────────────────────
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get listing by ID' })
-  async findById(@Param('id') id: string) {
-    return this.listingService.findById(id);
+  async findById(
+    @Param('id') id: string,
+    @CurrentUser('id') userId?: string,
+    @CurrentUser('role') role?: string,
+  ) {
+    return this.listingService.findById(id, userId, role);
   }
 
   // ─── OWNER ────────────────────────────────────────
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create listing (owner)' })
   async create(@CurrentUser('id') userId: string, @Body() data: any) {
@@ -99,6 +112,18 @@ export class ListingController {
     return this.listingService.update(id, userId, role, data);
   }
 
+  @Post(':id/resubmit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Resubmit a rejected listing for admin approval' })
+  async resubmitRejected(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.listingService.resubmitRejected(id, userId, role);
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -115,7 +140,7 @@ export class ListingController {
 
   @Post(':id/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add images to listing' })
   async addImages(
@@ -149,6 +174,22 @@ export class ListingController {
   @ApiOperation({ summary: 'Remove listing from favorites' })
   async unsave(@CurrentUser('id') userId: string, @Param('id') listingId: string) {
     return this.listingService.unsaveListing(userId, listingId);
+  }
+
+  @Post(':id/reveal-contact')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reveal owner contact for this listing (plan-limited)' })
+  async revealContact(@CurrentUser('id') userId: string, @Param('id') listingId: string) {
+    return this.listingService.revealContact(userId, listingId);
+  }
+
+  @Get(':id/reveal-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Check if contact is already revealed (no quota deduction)' })
+  async getRevealStatus(@CurrentUser('id') userId: string, @Param('id') listingId: string) {
+    return this.listingService.getRevealStatus(userId, listingId);
   }
 
   // ─── ADMIN ────────────────────────────────────────

@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth.store';
 import api from '@/lib/api';
 import Header from '@/components/Header';
+import { getCurrentPosition, reverseGeocode } from '@/lib/location';
 
 interface Category {
   id: string;
@@ -35,6 +37,20 @@ interface ListingFormData {
   amenities: AmenityRow[];
 }
 
+interface SubscriptionUsage {
+  usage: {
+    listings: { used: number; limit: number | null };
+    contactReveals: { used: number; limit: number | null };
+    bookingsThisMonth: { used: number; limit: number | null };
+    inquiriesThisMonth?: { used: number; limit: number | null };
+  };
+  subscription?: {
+    plan?: {
+      name?: string;
+    };
+  } | null;
+}
+
 const RENT_PERIODS = [
   { value: 'DAILY', label: 'Per Day' },
   { value: 'WEEKLY', label: 'Per Week' },
@@ -51,6 +67,10 @@ const INDIAN_STATES = [
   'Delhi', 'Chandigarh', 'Puducherry',
 ];
 
+const ListingLocationMap = dynamic(() => import('@/components/ListingLocationMap'), {
+  ssr: false,
+});
+
 export default function CreateListingPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, loadUser } = useAuthStore();
@@ -60,6 +80,9 @@ export default function CreateListingPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [usage, setUsage] = useState<SubscriptionUsage | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [resolvingAddress, setResolvingAddress] = useState(false);
 
   const [form, setForm] = useState<ListingFormData>({
     title: '',
@@ -82,8 +105,16 @@ export default function CreateListingPage() {
   }, [loadUser]);
 
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || user?.role !== 'OWNER')) {
+    const canCreateListing =
+      user?.role === 'OWNER' || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+
+    if (!isLoading && !isAuthenticated) {
       router.push('/login');
+      return;
+    }
+
+    if (!isLoading && isAuthenticated && !canCreateListing) {
+      router.push('/dashboard');
     }
   }, [isLoading, isAuthenticated, user, router]);
 
@@ -93,6 +124,13 @@ export default function CreateListingPage() {
       setCategories(Array.isArray(cats) ? cats : []);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.get('/subscriptions/usage').then(({ data }) => {
+      setUsage(data || null);
+    }).catch(() => {});
+  }, [isAuthenticated]);
 
   const updateForm = (field: keyof ListingFormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -119,14 +157,52 @@ export default function CreateListingPage() {
     }));
   };
 
+  const applyCoordinates = useCallback(async (latitude: number, longitude: number) => {
+    setForm((prev) => ({
+      ...prev,
+      latitude: latitude.toFixed(6),
+      longitude: longitude.toFixed(6),
+    }));
+
+    setResolvingAddress(true);
+    const geo = await reverseGeocode(latitude, longitude);
+    setResolvingAddress(false);
+
+    if (!geo) return;
+
+    setForm((prev) => ({
+      ...prev,
+      address: prev.address || geo.address || prev.address,
+      city: prev.city || geo.city || prev.city,
+      state: prev.state || geo.state || prev.state,
+      pincode: prev.pincode || geo.pincode || prev.pincode,
+      latitude: latitude.toFixed(6),
+      longitude: longitude.toFixed(6),
+    }));
+  }, []);
+
+  const handleUseCurrentLocation = useCallback(async () => {
+    setError('');
+    setLocating(true);
+
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      await applyCoordinates(latitude, longitude);
+    } catch (err: any) {
+      setError(err?.message || 'Could not access your current location. Please allow location permission and try again.');
+    } finally {
+      setLocating(false);
+    }
+  }, [applyCoordinates]);
+
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from((e.target as any).files || []) as File[];
     if (images.length + files.length > 10) {
       setError('Maximum 10 images allowed');
       return;
     }
 
-    const validFiles = files.filter((f) => {
+    const validFiles = files.filter((f: File) => {
       if (f.size > 5 * 1024 * 1024) return false;
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) return false;
       return true;
@@ -135,8 +211,10 @@ export default function CreateListingPage() {
     setImages((prev) => [...prev, ...validFiles]);
 
     validFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
+      const ReaderCtor = (globalThis as any)?.FileReader;
+      if (!ReaderCtor) return;
+      const reader = new ReaderCtor();
+      reader.onload = (ev: any) => {
         setImagePreviews((prev) => [...prev, ev.target?.result as string]);
       };
       reader.readAsDataURL(file);
@@ -155,7 +233,7 @@ export default function CreateListingPage() {
       case 2:
         return !!form.price && parseFloat(form.price) > 0;
       case 3:
-        return !!form.city.trim() && !!form.state;
+        return !!form.city.trim() && !!form.state && !!form.latitude && !!form.longitude;
       case 4:
         return true; // images optional
       default:
@@ -219,7 +297,12 @@ export default function CreateListingPage() {
 
       router.push('/my-listings');
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to create listing');
+      const message = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to create listing';
+      if (typeof message === 'string' && message.toLowerCase().includes('listing limit reached')) {
+        setError(`${message} Upgrade your plan from the Subscription page.`);
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -234,6 +317,8 @@ export default function CreateListingPage() {
   }
 
   const totalSteps = 5;
+  const latNumber = form.latitude ? Number(form.latitude) : null;
+  const lngNumber = form.longitude ? Number(form.longitude) : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -242,6 +327,24 @@ export default function CreateListingPage() {
       <div className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900">List Your Item for Rent</h1>
         <p className="mt-1 text-sm text-gray-500">Fill in the details to create your listing</p>
+
+        {usage && (
+          <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-indigo-900">
+                  Plan: {usage.subscription?.plan?.name || 'Default'}
+                </p>
+                <p className="mt-1 text-xs text-indigo-700">
+                  Listings used: {usage.usage.listings.used}/{usage.usage.listings.limit && usage.usage.listings.limit > 0 ? usage.usage.listings.limit : '∞'}
+                </p>
+              </div>
+              <Link href="/subscription" className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
+                Upgrade Plan
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="mt-6 flex items-center gap-2">
@@ -285,7 +388,7 @@ export default function CreateListingPage() {
               <label className="block text-sm font-medium text-gray-700">Category *</label>
               <select
                 value={form.categoryId}
-                onChange={(e) => updateForm('categoryId', e.target.value)}
+                onChange={(e: any) => updateForm('categoryId', e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Select a category</option>
@@ -302,7 +405,7 @@ export default function CreateListingPage() {
               <input
                 type="text"
                 value={form.title}
-                onChange={(e) => updateForm('title', e.target.value)}
+                onChange={(e: any) => updateForm('title', e.target.value)}
                 maxLength={200}
                 placeholder="e.g., 2BHK Apartment in Koramangala"
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -314,7 +417,7 @@ export default function CreateListingPage() {
               <label className="block text-sm font-medium text-gray-700">Description *</label>
               <textarea
                 value={form.description}
-                onChange={(e) => updateForm('description', e.target.value)}
+                onChange={(e: any) => updateForm('description', e.target.value)}
                 maxLength={5000}
                 rows={5}
                 placeholder="Describe your item, its condition, what's included, availability..."
@@ -333,14 +436,14 @@ export default function CreateListingPage() {
                     <input
                       type="text"
                       value={amenity.key}
-                      onChange={(e) => updateAmenity(i, 'key', e.target.value)}
+                      onChange={(e: any) => updateAmenity(i, 'key', e.target.value)}
                       placeholder="Label"
                       className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
                     />
                     <input
                       type="text"
                       value={amenity.value}
-                      onChange={(e) => updateAmenity(i, 'value', e.target.value)}
+                      onChange={(e: any) => updateAmenity(i, 'value', e.target.value)}
                       placeholder="Value"
                       className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
                     />
@@ -380,7 +483,7 @@ export default function CreateListingPage() {
                 <input
                   type="number"
                   value={form.price}
-                  onChange={(e) => updateForm('price', e.target.value)}
+                  onChange={(e: any) => updateForm('price', e.target.value)}
                   min="0"
                   step="100"
                   placeholder="5000"
@@ -392,7 +495,7 @@ export default function CreateListingPage() {
                 <label className="block text-sm font-medium text-gray-700">Rent Period *</label>
                 <select
                   value={form.rentPeriod}
-                  onChange={(e) => updateForm('rentPeriod', e.target.value)}
+                  onChange={(e: any) => updateForm('rentPeriod', e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   {RENT_PERIODS.map((p) => (
@@ -407,7 +510,7 @@ export default function CreateListingPage() {
               <input
                 type="number"
                 value={form.securityDeposit}
-                onChange={(e) => updateForm('securityDeposit', e.target.value)}
+                onChange={(e: any) => updateForm('securityDeposit', e.target.value)}
                 min="0"
                 step="100"
                 placeholder="Optional"
@@ -422,12 +525,48 @@ export default function CreateListingPage() {
           <div className="mt-6 space-y-4 rounded-xl border bg-white p-6">
             <h2 className="text-lg font-semibold text-gray-900">Location</h2>
 
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-slate-600">Pick exact listing location from map</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    disabled={locating}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {locating ? 'Locating...' : 'Use Current Location'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, latitude: '', longitude: '' }))}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Clear Pin
+                  </button>
+                </div>
+              </div>
+              <ListingLocationMap
+                latitude={typeof latNumber === 'number' && !Number.isNaN(latNumber) ? latNumber : null}
+                longitude={typeof lngNumber === 'number' && !Number.isNaN(lngNumber) ? lngNumber : null}
+                onChange={({ latitude, longitude }) => {
+                  void applyCoordinates(latitude, longitude);
+                }}
+                interactive
+                markerLabel="Listing location"
+              />
+              <p className="text-[11px] text-slate-500">
+                Click on map to pin location. Current-location uses browser permission.
+                {resolvingAddress ? ' Resolving address...' : ''}
+              </p>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700">Address</label>
               <input
                 type="text"
                 value={form.address}
-                onChange={(e) => updateForm('address', e.target.value)}
+                onChange={(e: any) => updateForm('address', e.target.value)}
                 placeholder="Full address (visible only after contact reveal)"
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
@@ -439,7 +578,7 @@ export default function CreateListingPage() {
                 <input
                   type="text"
                   value={form.city}
-                  onChange={(e) => updateForm('city', e.target.value)}
+                  onChange={(e: any) => updateForm('city', e.target.value)}
                   placeholder="e.g., Bangalore"
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
@@ -449,7 +588,7 @@ export default function CreateListingPage() {
                 <label className="block text-sm font-medium text-gray-700">State *</label>
                 <select
                   value={form.state}
-                  onChange={(e) => updateForm('state', e.target.value)}
+                  onChange={(e: any) => updateForm('state', e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="">Select state</option>
@@ -466,7 +605,7 @@ export default function CreateListingPage() {
                 <input
                   type="text"
                   value={form.pincode}
-                  onChange={(e) => updateForm('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={(e: any) => updateForm('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
                   maxLength={6}
                   placeholder="560001"
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -477,7 +616,7 @@ export default function CreateListingPage() {
                 <input
                   type="text"
                   value={form.latitude}
-                  onChange={(e) => updateForm('latitude', e.target.value)}
+                  onChange={(e: any) => updateForm('latitude', e.target.value)}
                   placeholder="12.9716"
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
@@ -487,7 +626,7 @@ export default function CreateListingPage() {
                 <input
                   type="text"
                   value={form.longitude}
-                  onChange={(e) => updateForm('longitude', e.target.value)}
+                  onChange={(e: any) => updateForm('longitude', e.target.value)}
                   placeholder="77.5946"
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
@@ -637,3 +776,4 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

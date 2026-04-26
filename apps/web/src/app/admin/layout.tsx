@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users', icon: UsersIcon },
   { href: '/admin/listings', label: 'Listings', icon: ListingsIcon },
   { href: '/admin/categories', label: 'Categories', icon: CategoriesIcon },
+  { href: '/admin/banners', label: 'Banners', icon: BannerIcon },
   { href: '/admin/plans', label: 'Plans', icon: PlansIcon },
   { href: '/admin/reports', label: 'Reports', icon: ReportsIcon },
   { href: '/admin/audit-log', label: 'Audit Log', icon: AuditIcon },
@@ -26,12 +27,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [loadUser]);
 
   useEffect(() => {
+    const hasAdminAccess =
+      user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'MODERATOR';
+
     if (!isLoading && !isAuthenticated) {
       router.push('/login');
-    } else if (!isLoading && user?.role !== 'ADMIN') {
+    } else if (!isLoading && !hasAdminAccess) {
       router.push('/dashboard');
     }
   }, [isLoading, isAuthenticated, user, router]);
+
+  const hasAdminAccess =
+    user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'MODERATOR';
 
   if (isLoading) {
     return (
@@ -44,7 +51,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!isAuthenticated || user?.role !== 'ADMIN') return null;
+  if (!isAuthenticated || !hasAdminAccess) return null;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -78,6 +85,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-3">
+          {!sidebarCollapsed && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <div className="grid grid-cols-2 gap-1">
+                <Link
+                  href="/admin"
+                  className="rounded-lg bg-white px-3 py-1.5 text-center text-xs font-semibold text-slate-900 shadow-sm"
+                >
+                  Admin Menu
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="rounded-lg px-3 py-1.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-white hover:text-slate-900"
+                >
+                  User Menu
+                </Link>
+              </div>
+            </div>
+          )}
           <ul className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
@@ -189,6 +214,14 @@ function PlansIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  );
+}
+
+function BannerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4h14a2 2 0 012 2v9a2 2 0 01-2 2h-5l-4 3v-3H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
     </svg>
   );
 }

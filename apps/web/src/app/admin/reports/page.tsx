@@ -195,7 +195,7 @@ export default function AdminReportsPage() {
             </p>
             <textarea
               value={actionNotes}
-              onChange={(e) => setActionNotes(e.target.value)}
+              onChange={(e: any) => setActionNotes(e.target.value)}
               placeholder="Admin notes (optional)..."
               rows={3}
               className="mt-4 w-full rounded-lg border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"

@@ -1,19 +1,48 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ListingStatus, UserRole } from '@rentage/shared-types';
 import { Prisma } from '@prisma/client';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Injectable()
 export class ListingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
+
+  private normalizeListingWriteData(data: any) {
+    const { amenities, categoryId, securityDeposit, ...rest } = data || {};
+    const normalized: any = { ...rest };
+
+    if (securityDeposit !== undefined && rest.depositAmount === undefined) {
+      normalized.depositAmount = securityDeposit;
+    }
+
+    if (typeof categoryId === 'string' && categoryId.trim()) {
+      normalized.category = { connect: { id: categoryId } };
+    }
+
+    delete normalized.categoryId;
+    delete normalized.securityDeposit;
+
+    return { amenities, normalized };
+  }
 
   async create(ownerId: string, data: any) {
-    const { amenities, ...listingData } = data;
+    await this.subscriptionService.assertListingCreationAllowed(ownerId);
+
+    const { amenities, normalized } = this.normalizeListingWriteData(data);
 
     const listing = await this.prisma.listing.create({
       data: {
-        ...listingData,
-        ownerId,
+        ...normalized,
+        owner: { connect: { id: ownerId } },
         status: ListingStatus.PENDING_APPROVAL,
         amenities: amenities?.length
           ? { createMany: { data: amenities } }
@@ -25,7 +54,7 @@ export class ListingService {
     return listing;
   }
 
-  async findById(id: string) {
+  async findById(id: string, viewerId?: string, viewerRole?: string) {
     const listing = await this.prisma.listing.findUnique({
       where: { id },
       include: {
@@ -42,6 +71,17 @@ export class ListingService {
     });
 
     if (!listing) throw new NotFoundException('Listing not found');
+
+    const isPrivilegedViewer =
+      viewerId === listing.ownerId ||
+      viewerRole === UserRole.ADMIN ||
+      viewerRole === UserRole.SUPER_ADMIN ||
+      viewerRole === UserRole.MODERATOR;
+
+    if (!isPrivilegedViewer && listing.status !== ListingStatus.ACTIVE) {
+      throw new NotFoundException('Listing not found');
+    }
+
     return listing;
   }
 
@@ -50,6 +90,8 @@ export class ListingService {
     categoryId?: string;
     city?: string;
     state?: string;
+    nearListingId?: string;
+    excludeId?: string;
     minPrice?: number;
     maxPrice?: number;
     rentPeriod?: string;
@@ -58,10 +100,26 @@ export class ListingService {
     cursor?: string;
     limit?: number;
   }) {
+    // Keep owner active listings aligned with subscription limits before serving public feed.
+    const rawOwnerIds = await this.prisma.listing.findMany({
+      where: { status: ListingStatus.ACTIVE },
+      select: { ownerId: true },
+      distinct: ['ownerId'],
+    });
+    if (rawOwnerIds.length > 0) {
+      await Promise.all(
+        rawOwnerIds.map((row) => this.subscriptionService.enforceOwnerActiveListingLimit(row.ownerId)),
+      );
+    }
+
     const limit = params.limit || 20;
     const where: Prisma.ListingWhereInput = {
       status: ListingStatus.ACTIVE,
     };
+
+    if (params.excludeId) {
+      where.id = { not: params.excludeId };
+    }
 
     if (params.featured) {
       where.isFeatured = true;
@@ -73,9 +131,59 @@ export class ListingService {
         { description: { contains: params.query } },
       ];
     }
+
+    let nearContextCity: string | undefined;
+    let nearContextState: string | undefined;
+    if (params.nearListingId) {
+      const nearListing = await this.prisma.listing.findUnique({
+        where: { id: params.nearListingId },
+        select: {
+          id: true,
+          city: true,
+          state: true,
+          latitude: true,
+          longitude: true,
+        },
+      });
+
+      if (nearListing) {
+        nearContextCity = nearListing.city || undefined;
+        nearContextState = nearListing.state || undefined;
+
+        if (
+          typeof nearListing.latitude === 'number' &&
+          typeof nearListing.longitude === 'number'
+        ) {
+          const latDelta = 0.35;
+          const lonDelta =
+            0.35 / Math.max(Math.cos((nearListing.latitude * Math.PI) / 180), 0.2);
+
+          where.latitude = {
+            gte: nearListing.latitude - latDelta,
+            lte: nearListing.latitude + latDelta,
+          };
+
+          where.longitude = {
+            gte: nearListing.longitude - lonDelta,
+            lte: nearListing.longitude + lonDelta,
+          };
+        }
+      }
+    }
+
     if (params.categoryId) where.categoryId = params.categoryId;
-    if (params.city) where.city = { contains: params.city };
-    if (params.state) where.state = params.state;
+    if (params.city) {
+      where.city = { contains: params.city };
+    } else if (nearContextCity) {
+      where.city = { contains: nearContextCity };
+    }
+
+    if (params.state) {
+      where.state = params.state;
+    } else if (nearContextState) {
+      where.state = nearContextState;
+    }
+
     if (params.minPrice || params.maxPrice) {
       where.price = {};
       if (params.minPrice) where.price.gte = params.minPrice;
@@ -123,8 +231,10 @@ export class ListingService {
   }
 
   async getOwnerListings(ownerId: string, status?: string) {
+    await this.subscriptionService.enforceOwnerActiveListingLimit(ownerId);
+
     const where: Prisma.ListingWhereInput = { ownerId };
-    if (status) where.status = status as ListingStatus;
+    if (status) where.status = status as any;
 
     return this.prisma.listing.findMany({
       where,
@@ -144,7 +254,16 @@ export class ListingService {
       throw new ForbiddenException('Not your listing');
     }
 
-    const { amenities, ...updateData } = data;
+    const { amenities, normalized } = this.normalizeListingWriteData(data);
+
+    if (normalized.status === ListingStatus.ACTIVE) {
+      if (listing.status === ListingStatus.REJECTED) {
+        throw new BadRequestException(
+          'Rejected listings cannot be activated directly. Please resubmit for approval after fixing issues.',
+        );
+      }
+      await this.subscriptionService.assertListingActivationAllowed(listing.ownerId, listing.id);
+    }
 
     if (amenities) {
       await this.prisma.listingAmenity.deleteMany({ where: { listingId: id } });
@@ -153,11 +272,15 @@ export class ListingService {
       });
     }
 
-    return this.prisma.listing.update({
+    const updated = await this.prisma.listing.update({
       where: { id },
-      data: updateData,
+      data: normalized,
       include: { images: true, amenities: true, category: true },
     });
+
+    await this.subscriptionService.enforceOwnerActiveListingLimit(listing.ownerId);
+
+    return updated;
   }
 
   async delete(id: string, userId: string, role: string) {
@@ -186,9 +309,16 @@ export class ListingService {
   }
 
   async approveListing(id: string) {
-    return this.prisma.listing.update({
+    const updated = await this.prisma.listing.update({
       where: { id },
       data: { status: ListingStatus.ACTIVE, rejectionReason: null },
+    });
+
+    await this.subscriptionService.enforceOwnerActiveListingLimit(updated.ownerId);
+
+    return this.prisma.listing.findUnique({
+      where: { id: updated.id },
+      include: { images: true, amenities: true, category: true },
     });
   }
 
@@ -196,6 +326,26 @@ export class ListingService {
     return this.prisma.listing.update({
       where: { id },
       data: { status: ListingStatus.REJECTED, rejectionReason: reason },
+    });
+  }
+
+  async resubmitRejected(id: string, userId: string, role: string) {
+    const listing = await this.prisma.listing.findUnique({ where: { id } });
+    if (!listing) throw new NotFoundException('Listing not found');
+    if (listing.ownerId !== userId && role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Not your listing');
+    }
+    if (listing.status !== ListingStatus.REJECTED) {
+      throw new BadRequestException('Only rejected listings can be resubmitted');
+    }
+
+    return this.prisma.listing.update({
+      where: { id },
+      data: {
+        status: ListingStatus.PENDING_APPROVAL,
+        rejectionReason: null,
+      },
+      include: { images: true, amenities: true, category: true },
     });
   }
 
@@ -238,5 +388,85 @@ export class ListingService {
 
   async removeImage(imageId: string) {
     return this.prisma.listingImage.delete({ where: { id: imageId } });
+  }
+
+  async revealContact(revealerId: string, listingId: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: {
+        id: true,
+        ownerId: true,
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            profile: {
+              select: {
+                fullName: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.ownerId === revealerId) {
+      throw new BadRequestException('You cannot reveal contact for your own listing');
+    }
+
+    const existing = await this.prisma.contactReveal.findUnique({
+      where: {
+        revealerId_listingId: {
+          revealerId,
+          listingId,
+        },
+      },
+      select: { id: true, createdAt: true },
+    });
+
+    if (!existing) {
+      await this.subscriptionService.assertContactRevealAllowed(revealerId);
+
+      await this.prisma.contactReveal.create({
+        data: {
+          revealerId,
+          ownerId: listing.ownerId,
+          listingId,
+        },
+      });
+    }
+
+    return {
+      revealed: true,
+      alreadyRevealed: Boolean(existing),
+      owner: {
+        id: listing.owner.id,
+        fullName: listing.owner.profile?.fullName || 'Owner',
+        phone: listing.owner.profile?.phone || null,
+        email: listing.owner.email,
+      },
+    };
+  }
+
+  async getRevealStatus(userId: string, listingId: string) {
+    const reveal = await this.prisma.contactReveal.findUnique({
+      where: {
+        revealerId_listingId: {
+          revealerId: userId,
+          listingId,
+        },
+      },
+      select: { id: true, createdAt: true },
+    });
+
+    return {
+      isRevealed: Boolean(reveal),
+      revealedAt: reveal?.createdAt || null,
+    };
   }
 }

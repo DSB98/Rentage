@@ -20,6 +20,8 @@ export class AdminService {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
 
     const [
       totalUsers,
@@ -40,6 +42,10 @@ export class AdminService {
       totalReportsPending,
       totalPayments,
       revenueResult,
+      activeSubscriptions,
+      totalPlans,
+      planRows,
+      subscribedUsers,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
@@ -59,7 +65,155 @@ export class AdminService {
       this.prisma.report.count({ where: { status: 'PENDING' } }),
       this.prisma.payment.count({ where: { status: 'CAPTURED' } }),
       this.prisma.payment.aggregate({ where: { status: 'CAPTURED' }, _sum: { amount: true } }),
+      this.prisma.userSubscription.count({
+        where: { status: 'ACTIVE' as any },
+      }),
+      this.prisma.subscriptionPlan.count({ where: { isActive: true } }),
+      this.prisma.subscriptionPlan.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          maxListings: true,
+          maxContactReveals: true,
+          _count: { select: { subscriptions: true } },
+        },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.userSubscription.findMany({
+        where: { status: 'ACTIVE' as any },
+        select: {
+          userId: true,
+          planId: true,
+          plan: {
+            select: {
+              name: true,
+              maxListings: true,
+              maxContactReveals: true,
+            },
+          },
+        },
+      }),
     ]);
+
+    const subscribedUserIds = subscribedUsers.map((s) => s.userId);
+    let planUtilization: {
+      planId: string;
+      planName: string;
+      subscribers: number;
+      avgListingsUsagePct: number;
+      avgContactRevealUsagePct: number;
+      avgBookingsUsagePct: number;
+      avgInquiriesUsagePct: number;
+    }[] = [];
+    let quotaBreaches = {
+      listings: 0,
+      contactReveals: 0,
+      bookings: 0,
+      inquiries: 0,
+    };
+
+    if (subscribedUserIds.length > 0) {
+      const usageByUser = await Promise.all(
+        subscribedUsers.map(async (sub) => {
+          const [listingsUsed, revealsUsed] = await Promise.all([
+            this.prisma.listing.count({
+              where: {
+                ownerId: sub.userId,
+                status: { in: ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'INACTIVE', 'REJECTED'] as any },
+              },
+            }),
+            this.prisma.contactReveal.count({
+              where: {
+                revealerId: sub.userId,
+                createdAt: { gte: monthStart, lt: monthEnd },
+              },
+            }),
+          ]);
+
+          return {
+            userId: sub.userId,
+            planId: sub.planId,
+            listingsUsed,
+            revealsUsed,
+            listingsLimit: sub.plan.maxListings,
+            revealsLimit: sub.plan.maxContactReveals,
+          };
+        }),
+      );
+
+      const aggByPlan: Record<
+        string,
+        {
+          subscribers: number;
+          listingsPctSum: number;
+          listingsPctCount: number;
+          revealsPctSum: number;
+          revealsPctCount: number;
+          bookingsPctSum: number;
+          bookingsPctCount: number;
+          inquiriesPctSum: number;
+          inquiriesPctCount: number;
+        }
+      > = {};
+
+      for (const row of usageByUser) {
+        const limits = {
+          listings: row.listingsLimit,
+          reveals: row.revealsLimit,
+        };
+
+        if (!aggByPlan[row.planId]) {
+          aggByPlan[row.planId] = {
+            subscribers: 0,
+            listingsPctSum: 0,
+            listingsPctCount: 0,
+            revealsPctSum: 0,
+            revealsPctCount: 0,
+            bookingsPctSum: 0,
+            bookingsPctCount: 0,
+            inquiriesPctSum: 0,
+            inquiriesPctCount: 0,
+          };
+        }
+
+        const bucket = aggByPlan[row.planId];
+        bucket.subscribers += 1;
+
+        if (limits.listings > 0) {
+          bucket.listingsPctSum += (row.listingsUsed / limits.listings) * 100;
+          bucket.listingsPctCount += 1;
+          if (row.listingsUsed >= limits.listings) quotaBreaches.listings += 1;
+        }
+
+        if (limits.reveals > 0) {
+          bucket.revealsPctSum += (row.revealsUsed / limits.reveals) * 100;
+          bucket.revealsPctCount += 1;
+          if (row.revealsUsed >= limits.reveals) quotaBreaches.contactReveals += 1;
+        }
+      }
+
+      planUtilization = planRows.map((plan) => {
+        const bucket = aggByPlan[plan.id];
+        return {
+          planId: plan.id,
+          planName: plan.name,
+          subscribers: plan._count.subscriptions,
+          avgListingsUsagePct: bucket?.listingsPctCount
+            ? Number((bucket.listingsPctSum / bucket.listingsPctCount).toFixed(1))
+            : 0,
+          avgContactRevealUsagePct: bucket?.revealsPctCount
+            ? Number((bucket.revealsPctSum / bucket.revealsPctCount).toFixed(1))
+            : 0,
+          avgBookingsUsagePct: bucket?.bookingsPctCount
+            ? Number((bucket.bookingsPctSum / bucket.bookingsPctCount).toFixed(1))
+            : 0,
+          avgInquiriesUsagePct: bucket?.inquiriesPctCount
+            ? Number((bucket.inquiriesPctSum / bucket.inquiriesPctCount).toFixed(1))
+            : 0,
+        };
+      });
+    }
 
     // Category breakdown
     const categoryBreakdown = await this.prisma.category.findMany({
@@ -103,6 +257,12 @@ export class AdminService {
       revenue: {
         totalPayments,
         totalRevenue: revenueResult._sum.amount || 0,
+      },
+      subscription: {
+        activeSubscriptions,
+        totalPlans,
+        planUtilization,
+        quotaBreaches,
       },
       categories: totalCategories,
     };
@@ -505,6 +665,74 @@ export class AdminService {
     await this.prisma.subscriptionPlan.delete({ where: { id } });
     await this.logAction(adminId, 'DELETE_PLAN', 'PLAN', id, { name: plan.name });
     return { message: 'Plan deleted' };
+  }
+
+  // ─── BANNER MANAGEMENT ─────────────────────────
+
+  async getBanners() {
+    return this.prisma.banner.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async createBanner(
+    data: { title?: string; imageUrl: string; linkUrl?: string; sortOrder?: number; isActive?: boolean },
+    adminId: string,
+  ) {
+    if (!data.imageUrl?.trim()) {
+      throw new BadRequestException('imageUrl is required');
+    }
+
+    const banner = await this.prisma.banner.create({
+      data: {
+        title: data.title?.trim() || null,
+        imageUrl: data.imageUrl.trim(),
+        linkUrl: data.linkUrl?.trim() || null,
+        sortOrder: data.sortOrder ?? 0,
+        isActive: data.isActive ?? true,
+      },
+    });
+
+    await this.logAction(adminId, 'CREATE_BANNER', 'BANNER', banner.id, {
+      imageUrl: banner.imageUrl,
+      title: banner.title,
+    });
+
+    return banner;
+  }
+
+  async updateBanner(
+    id: string,
+    data: { title?: string; imageUrl?: string; linkUrl?: string; sortOrder?: number; isActive?: boolean },
+    adminId: string,
+  ) {
+    const banner = await this.prisma.banner.findUnique({ where: { id } });
+    if (!banner) throw new NotFoundException('Banner not found');
+
+    const payload = {
+      ...(data.title !== undefined ? { title: data.title?.trim() || null } : {}),
+      ...(data.imageUrl !== undefined ? { imageUrl: data.imageUrl.trim() } : {}),
+      ...(data.linkUrl !== undefined ? { linkUrl: data.linkUrl?.trim() || null } : {}),
+      ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+    };
+
+    if ('imageUrl' in payload && !payload.imageUrl) {
+      throw new BadRequestException('imageUrl cannot be empty');
+    }
+
+    const updated = await this.prisma.banner.update({ where: { id }, data: payload });
+    await this.logAction(adminId, 'UPDATE_BANNER', 'BANNER', id, { changes: payload });
+    return updated;
+  }
+
+  async deleteBanner(id: string, adminId: string) {
+    const banner = await this.prisma.banner.findUnique({ where: { id } });
+    if (!banner) throw new NotFoundException('Banner not found');
+
+    await this.prisma.banner.delete({ where: { id } });
+    await this.logAction(adminId, 'DELETE_BANNER', 'BANNER', id, { imageUrl: banner.imageUrl });
+    return { message: 'Banner deleted' };
   }
 
   // ─── REPORTS ──────────────────────────────────────

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
 import ListingCard from './ListingCard';
 
 interface FeaturedCarouselProps {
@@ -20,14 +19,14 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   // ─── Check scroll boundaries ─────────────────────
   const updateScrollState = useCallback(() => {
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > 5);
     setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5);
   }, []);
 
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (!el) return;
     el.addEventListener('scroll', updateScrollState, { passive: true });
     updateScrollState();
@@ -36,7 +35,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   // ─── Manual scroll via buttons ────────────────────
   const scrollBy = useCallback((direction: 'left' | 'right') => {
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (!el) return;
     // Scroll by roughly one card width + gap
     const cardWidth = 320;
@@ -48,7 +47,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
   const startAutoScroll = useCallback(() => {
     if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
     autoScrollTimer.current = setInterval(() => {
-      const el = scrollRef.current;
+      const el = scrollRef.current as any;
       if (!el) return;
 
       // If at the end, scroll back to start
@@ -78,7 +77,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   // ─── Drag-to-scroll (mouse) ───────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (!el) return;
     setIsDragging(true);
     dragStartX.current = e.pageX;
@@ -88,7 +87,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (!el) return;
     e.preventDefault();
     const dx = e.pageX - dragStartX.current;
@@ -97,7 +96,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   const handleMouseUp = () => {
     setIsDragging(false);
-    const el = scrollRef.current;
+    const el = scrollRef.current as any;
     if (el) el.style.cursor = 'grab';
   };
 
@@ -105,7 +104,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
 
   return (
     <section className="section bg-gradient-to-b from-white to-surface-50">
-      <div className="mx-auto max-w-7xl">
+      <div className="w-full">
         {/* ─── Header ─── */}
         <div className="flex items-end justify-between">
           <div>
@@ -223,7 +222,7 @@ export default function FeaturedCarousel({ listings }: FeaturedCarouselProps) {
                 <button
                   key={i}
                   onClick={() => {
-                    const el = scrollRef.current;
+                    const el = scrollRef.current as any;
                     if (!el) return;
                     const scrollTarget = (el.scrollWidth / Math.ceil(listings.length / 3)) * i;
                     el.scrollTo({ left: scrollTarget, behavior: 'smooth' });

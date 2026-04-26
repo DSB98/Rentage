@@ -113,14 +113,14 @@ export default function AdminListingsPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: any) => setSearch(e.target.value)}
             placeholder="Search listings..."
             className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
         <select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
+          onChange={(e: any) => setCategoryFilter(e.target.value)}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
         >
           <option value="">All Categories</option>
@@ -273,7 +273,7 @@ export default function AdminListingsPage() {
             <p className="mt-1 text-sm text-slate-500">Provide a reason for rejecting &quot;{rejectModal.title}&quot;</p>
             <textarea
               value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
+              onChange={(e: any) => setRejectReason(e.target.value)}
               placeholder="Enter rejection reason..."
               rows={3}
               className="mt-4 w-full rounded-lg border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

@@ -206,6 +206,42 @@ export class AdminController {
     return this.adminService.deletePlan(id, adminId);
   }
 
+  // ─── BANNER MANAGEMENT ────────────────────────
+
+  @Get('banners')
+  @ApiOperation({ summary: 'Get all homepage banners' })
+  async getBanners() {
+    return this.adminService.getBanners();
+  }
+
+  @Post('banners')
+  @ApiOperation({ summary: 'Create homepage banner' })
+  async createBanner(
+    @Body() data: { title?: string; imageUrl: string; linkUrl?: string; sortOrder?: number; isActive?: boolean },
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.createBanner(data, adminId);
+  }
+
+  @Patch('banners/:id')
+  @ApiOperation({ summary: 'Update homepage banner' })
+  async updateBanner(
+    @Param('id') id: string,
+    @Body() data: { title?: string; imageUrl?: string; linkUrl?: string; sortOrder?: number; isActive?: boolean },
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.updateBanner(id, data, adminId);
+  }
+
+  @Delete('banners/:id')
+  @ApiOperation({ summary: 'Delete homepage banner' })
+  async deleteBanner(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.deleteBanner(id, adminId);
+  }
+
   // ─── REPORTS ──────────────────────────────────────
 
   @Get('reports')

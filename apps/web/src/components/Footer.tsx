@@ -13,13 +13,24 @@ const categories = [
 ];
 
 export default function Footer() {
+  const legalLinks = [
+    { label: 'Trust & Safety', href: '/trust-and-safety' },
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'Terms & Conditions', href: '/terms-and-conditions' },
+    { label: 'Refund Policy', href: '/refund-policy' },
+    { label: 'Disclaimer', href: '/disclaimer' },
+    { label: 'Acceptable Use', href: '/acceptable-use' },
+    { label: 'Cookie Policy', href: '/cookie-policy' },
+    { label: 'Support', href: '/support' },
+  ];
+
   return (
     <footer className="relative overflow-hidden border-t border-surface-200/60 bg-slate-950 text-surface-400">
       {/* Subtle gradient glow */}
       <div className="absolute -top-px left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary-500/50 to-transparent" />
 
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="w-full px-4 py-16 sm:px-6 lg:px-8">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2">
@@ -70,6 +81,17 @@ export default function Footer() {
             </ul>
           </div>
 
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-surface-300">Legal & Trust</h4>
+            <ul className="mt-4 space-y-2.5">
+              {legalLinks.map((item) => (
+                <li key={item.href}>
+                  <Link href={item.href} className="text-sm transition-colors hover:text-white">{item.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           {/* Newsletter / Contact */}
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-widest text-surface-300">Stay Connected</h4>
@@ -93,9 +115,14 @@ export default function Footer() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
           <p className="text-xs text-surface-400">&copy; {new Date().getFullYear()} Rentage. All rights reserved.</p>
-          <div className="flex gap-6 text-xs text-surface-400">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-surface-400">
+            <Link href="/trust-and-safety" className="transition-colors hover:text-white">Trust &amp; Safety</Link>
             <Link href="/privacy" className="transition-colors hover:text-white">Privacy Policy</Link>
-            <Link href="/terms" className="transition-colors hover:text-white">Terms of Service</Link>
+            <Link href="/terms-and-conditions" className="transition-colors hover:text-white">Terms & Conditions</Link>
+            <Link href="/refund-policy" className="transition-colors hover:text-white">Refund Policy</Link>
+            <Link href="/disclaimer" className="transition-colors hover:text-white">Disclaimer</Link>
+            <Link href="/cookie-policy" className="transition-colors hover:text-white">Cookies</Link>
+            <Link href="/support" className="transition-colors hover:text-white">Support</Link>
           </div>
         </div>
       </div>

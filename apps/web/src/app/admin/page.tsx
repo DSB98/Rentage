@@ -16,6 +16,25 @@ interface Stats {
   };
   engagement: { totalConversations: number; totalMessages: number; pendingReports: number };
   revenue: { totalPayments: number; totalRevenue: number };
+  subscription: {
+    activeSubscriptions: number;
+    totalPlans: number;
+    planUtilization: {
+      planId: string;
+      planName: string;
+      subscribers: number;
+      avgListingsUsagePct: number;
+      avgContactRevealUsagePct: number;
+      avgBookingsUsagePct: number;
+      avgInquiriesUsagePct: number;
+    }[];
+    quotaBreaches: {
+      listings: number;
+      contactReveals: number;
+      bookings: number;
+      inquiries: number;
+    };
+  };
   categories: number;
 }
 
@@ -69,6 +88,18 @@ export default function AdminDashboardPage() {
     { label: 'Renters', value: stats.users.roleBreakdown.find(r => r.role === 'RENTER')?.count || 0, change: 'Registered renters', color: 'teal', href: '/admin/users?role=RENTER' },
     { label: 'Conversations', value: stats.engagement.totalConversations, change: `${stats.engagement.totalMessages} messages`, color: 'sky', href: '#' },
     { label: 'Pending Reports', value: stats.engagement.pendingReports, change: 'Needs attention', color: 'red', href: '/admin/reports' },
+    { label: 'Active Subscriptions', value: stats.subscription.activeSubscriptions, change: `${stats.subscription.totalPlans} active plans`, color: 'indigo', href: '/admin/plans' },
+    {
+      label: 'Quota Breaches',
+      value:
+        stats.subscription.quotaBreaches.listings +
+        stats.subscription.quotaBreaches.contactReveals +
+        stats.subscription.quotaBreaches.bookings +
+        stats.subscription.quotaBreaches.inquiries,
+      change: 'Users at/over plan limits',
+      color: 'amber',
+      href: '/admin/plans',
+    },
   ];
 
   const COLORS: Record<string, { bg: string; text: string; accent: string }> = {
@@ -227,7 +258,70 @@ export default function AdminDashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Plan Utilization */}
+        <div className="rounded-xl border border-slate-200 bg-white p-6 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900">Subscription Utilization</h3>
+            <Link href="/admin/plans" className="text-xs font-medium text-indigo-600 hover:text-indigo-700">Manage Plans →</Link>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MiniMetric label="Listing breaches" value={stats.subscription.quotaBreaches.listings} tone="amber" />
+            <MiniMetric label="Reveal breaches" value={stats.subscription.quotaBreaches.contactReveals} tone="red" />
+            <MiniMetric label="Booking breaches" value={stats.subscription.quotaBreaches.bookings} tone="orange" />
+            <MiniMetric label="Inquiry breaches" value={stats.subscription.quotaBreaches.inquiries} tone="violet" />
+          </div>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-3">Plan</th>
+                  <th className="py-2 pr-3">Subscribers</th>
+                  <th className="py-2 pr-3">Listings Usage</th>
+                  <th className="py-2 pr-3">Reveals Usage</th>
+                  <th className="py-2 pr-3">Bookings Usage</th>
+                  <th className="py-2">Inquiries Usage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.subscription.planUtilization.map((p) => (
+                  <tr key={p.planId} className="border-b border-slate-100">
+                    <td className="py-2 pr-3 font-medium text-slate-800">{p.planName}</td>
+                    <td className="py-2 pr-3 text-slate-600">{p.subscribers}</td>
+                    <td className="py-2 pr-3 text-slate-600">{p.avgListingsUsagePct}%</td>
+                    <td className="py-2 pr-3 text-slate-600">{p.avgContactRevealUsagePct}%</td>
+                    <td className="py-2 pr-3 text-slate-600">{p.avgBookingsUsagePct}%</td>
+                    <td className="py-2 text-slate-600">{p.avgInquiriesUsagePct}%</td>
+                  </tr>
+                ))}
+                {stats.subscription.planUtilization.length === 0 && (
+                  <tr>
+                    <td className="py-4 text-center text-slate-400" colSpan={6}>No subscription utilization data yet</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value, tone }: { label: string; value: number; tone: 'amber' | 'red' | 'orange' | 'violet' }) {
+  const tones: Record<string, string> = {
+    amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-700',
+    orange: 'bg-orange-50 text-orange-700',
+    violet: 'bg-violet-50 text-violet-700',
+  };
+
+  return (
+    <div className={`rounded-lg px-3 py-2 ${tones[tone]}`}>
+      <p className="text-[11px] font-medium uppercase tracking-wide">{label}</p>
+      <p className="mt-1 text-xl font-bold">{value}</p>
     </div>
   );
 }

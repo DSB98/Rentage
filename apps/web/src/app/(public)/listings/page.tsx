@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -28,6 +28,20 @@ interface Category {
   slug: string;
 }
 
+const resolveCategoryId = (categoryParam: string, categories: Category[]) => {
+  if (!categoryParam) return '';
+
+  const normalized = categoryParam.trim().toLowerCase();
+  const match = categories.find(
+    (cat) =>
+      cat.id === categoryParam ||
+      cat.slug.toLowerCase() === normalized ||
+      cat.name.toLowerCase() === normalized,
+  );
+
+  return match?.id || categoryParam;
+};
+
 const RENT_PERIODS = [
   { value: '', label: 'All' },
   { value: 'DAILY', label: 'Daily' },
@@ -42,8 +56,7 @@ const SORT_OPTIONS = [
   { value: 'price_desc', label: 'Price: High to Low' },
 ];
 
-export default function ListingsPage() {
-  const router = useRouter();
+function ListingsPageContent() {
   const searchParams = useSearchParams();
 
   const [listings, setListings] = useState<Listing[]>([]);
@@ -55,6 +68,7 @@ export default function ListingsPage() {
 
   // Filter state from URL params
   const [query, setQuery] = useState(searchParams.get('q') || '');
+  const [appliedQuery, setAppliedQuery] = useState(searchParams.get('q') || '');
   const [categoryId, setCategoryId] = useState(searchParams.get('category') || '');
   const [city, setCity] = useState(searchParams.get('city') || '');
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
@@ -69,12 +83,27 @@ export default function ListingsPage() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const nextQuery = searchParams.get('q') || '';
+    setQuery(nextQuery);
+    setAppliedQuery(nextQuery);
+    setCategoryId(searchParams.get('category') || '');
+    setCity(searchParams.get('city') || '');
+    setMinPrice(searchParams.get('minPrice') || '');
+    setMaxPrice(searchParams.get('maxPrice') || '');
+    setRentPeriod(searchParams.get('rentPeriod') || '');
+    setSort(searchParams.get('sort') || 'newest');
+    setCursor(undefined);
+  }, [searchParams]);
+
   const fetchListings = useCallback(async (append = false) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (query) params.set('query', query);
-      if (categoryId) params.set('categoryId', categoryId);
+      const resolvedCategoryId = resolveCategoryId(categoryId, categories);
+
+      if (appliedQuery) params.set('query', appliedQuery);
+      if (resolvedCategoryId) params.set('categoryId', resolvedCategoryId);
       if (city) params.set('city', city);
       if (minPrice) params.set('minPrice', minPrice);
       if (maxPrice) params.set('maxPrice', maxPrice);
@@ -103,19 +132,20 @@ export default function ListingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, categoryId, city, minPrice, maxPrice, rentPeriod, sort, cursor]);
+  }, [appliedQuery, categoryId, categories, city, minPrice, maxPrice, rentPeriod, sort, cursor]);
 
   useEffect(() => {
     fetchListings(false);
-  }, [categoryId, city, minPrice, maxPrice, rentPeriod, sort]);
+  }, [appliedQuery, categoryId, categories, city, minPrice, maxPrice, rentPeriod, sort]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchListings(false);
+    setAppliedQuery(query.trim());
   };
 
   const clearFilters = () => {
     setQuery('');
+    setAppliedQuery('');
     setCategoryId('');
     setCity('');
     setMinPrice('');
@@ -124,7 +154,7 @@ export default function ListingsPage() {
     setSort('newest');
   };
 
-  const hasActiveFilters = categoryId || city || minPrice || maxPrice || rentPeriod || query;
+  const hasActiveFilters = categoryId || city || minPrice || maxPrice || rentPeriod || appliedQuery;
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -140,7 +170,7 @@ export default function ListingsPage() {
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e: any) => setQuery(e.target.value)}
               placeholder="Search for homes, cars, bikes, appliances..."
               className="input-lg w-full pl-12"
             />
@@ -171,7 +201,7 @@ export default function ListingsPage() {
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400">Category</label>
-                <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="select mt-1.5 w-full">
+                <select value={categoryId} onChange={(e: any) => setCategoryId(e.target.value)} className="select mt-1.5 w-full">
                   <option value="">All Categories</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -185,7 +215,7 @@ export default function ListingsPage() {
                 <input
                   type="text"
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  onChange={(e: any) => setCity(e.target.value)}
                   placeholder="e.g., Bangalore"
                   className="input mt-1.5 w-full"
                 />
@@ -195,9 +225,9 @@ export default function ListingsPage() {
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400">Price Range (₹)</label>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <input type="number" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="Min" min="0" className="input w-full" />
+                  <input type="number" value={minPrice} onChange={(e: any) => setMinPrice(e.target.value)} placeholder="Min" min="0" className="input w-full" />
                   <span className="text-surface-300">–</span>
-                  <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Max" min="0" className="input w-full" />
+                  <input type="number" value={maxPrice} onChange={(e: any) => setMaxPrice(e.target.value)} placeholder="Max" min="0" className="input w-full" />
                 </div>
               </div>
 
@@ -212,7 +242,7 @@ export default function ListingsPage() {
                         name="rentPeriod"
                         value={rp.value}
                         checked={rentPeriod === rp.value}
-                        onChange={(e) => setRentPeriod(e.target.value)}
+                        onChange={(e: any) => setRentPeriod(e.target.value)}
                         className="text-primary-600 focus:ring-primary-500"
                       />
                       <span className="text-slate-700">{rp.label}</span>
@@ -224,7 +254,7 @@ export default function ListingsPage() {
               {/* Sort */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400">Sort By</label>
-                <select value={sort} onChange={(e) => setSort(e.target.value)} className="select mt-1.5 w-full">
+                <select value={sort} onChange={(e: any) => setSort(e.target.value)} className="select mt-1.5 w-full">
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
@@ -239,10 +269,14 @@ export default function ListingsPage() {
               <p className="text-sm font-medium text-surface-400">{totalText}</p>
               {hasActiveFilters && (
                 <div className="flex flex-wrap gap-2">
-                  {query && <FilterChip label={`"${query}"`} onRemove={() => { setQuery(''); fetchListings(false); }} />}
+                  {appliedQuery && <FilterChip label={`"${appliedQuery}"`} onRemove={() => { setQuery(''); setAppliedQuery(''); }} />}
                   {categoryId && (
                     <FilterChip
-                      label={categories.find((c) => c.id === categoryId)?.name || 'Category'}
+                      label={
+                        categories.find(
+                          (c) => c.id === categoryId || c.slug === categoryId || c.name.toLowerCase() === categoryId.toLowerCase(),
+                        )?.name || 'Category'
+                      }
                       onRemove={() => setCategoryId('')}
                     />
                   )}
@@ -323,6 +357,14 @@ export default function ListingsPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function ListingsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-surface-50" />}>
+      <ListingsPageContent />
+    </Suspense>
   );
 }
 

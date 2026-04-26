@@ -1,16 +1,54 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+const normalizeLocalApiUrl = (url: string) => {
+  if (url.includes('http://localhost:4100')) {
+    return url.replace('http://localhost:4100', 'http://localhost:4000');
+  }
+
+  return url;
+};
+
+const API_URL = normalizeLocalApiUrl(
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1',
+);
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
 });
+
+const unwrap = <T = any>(payload: any): T => {
+  if (payload && typeof payload === 'object' && 'data' in payload && 'success' in payload) {
+    // Preserve pagination metadata for list endpoints while still unwrapping data.
+    if ('meta' in payload) {
+      return {
+        items: payload.data,
+        meta: payload.meta,
+      } as T;
+    }
+
+    return payload.data as T;
+  }
+  return payload as T;
+};
+
+const isPublicEndpoint = (url?: string) => {
+  if (!url) return false;
+
+  return /^\/(categories|listings|banners)(\/|\?|$)/.test(url);
+};
 
 // Request interceptor — attach access token
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('accessToken');
+  const method = (config.method || 'get').toLowerCase();
+  if (method === 'get' || method === 'head') {
+    delete config.headers['Content-Type'];
+  } else if (!config.headers['Content-Type']) {
+    config.headers['Content-Type'] = 'application/json';
+  }
+
+  const storage = (globalThis as any)?.localStorage;
+  if (storage && !isPublicEndpoint(config.url)) {
+    const token = storage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -20,7 +58,10 @@ api.interceptors.request.use((config) => {
 
 // Response interceptor — handle 401 + auto-refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    response.data = unwrap(response.data);
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
 
@@ -28,21 +69,24 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        const storage = (globalThis as any)?.localStorage;
+        const refreshToken = storage?.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
         const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const refreshed = unwrap<{ tokens: { accessToken: string; refreshToken: string } }>(data);
 
-        localStorage.setItem('accessToken', data.tokens.accessToken);
-        localStorage.setItem('refreshToken', data.tokens.refreshToken);
+        storage?.setItem('accessToken', refreshed.tokens.accessToken);
+        storage?.setItem('refreshToken', refreshed.tokens.refreshToken);
 
-        originalRequest.headers.Authorization = `Bearer ${data.tokens.accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${refreshed.tokens.accessToken}`;
         return api(originalRequest);
       } catch {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+        const storage = (globalThis as any)?.localStorage;
+        storage?.removeItem('accessToken');
+        storage?.removeItem('refreshToken');
+        if ((globalThis as any)?.location) {
+          (globalThis as any).location.href = '/login';
         }
       }
     }

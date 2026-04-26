@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import ListingCard from '@/components/ListingCard';
+import { getCurrentPosition } from '@/lib/location';
 
 interface ListingDetail {
   id: string;
@@ -71,6 +73,10 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+const ListingLocationMap = dynamic(() => import('@/components/ListingLocationMap'), {
+  ssr: false,
+});
+
 export default function ListingDetailPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -83,6 +89,20 @@ export default function ListingDetailPage() {
   const [saving, setSaving] = useState(false);
   const [similarListings, setSimilarListings] = useState<any[]>([]);
   const [copied, setCopied] = useState(false);
+  const [contactInfo, setContactInfo] = useState<{ fullName: string; phone: string | null; email: string | null } | null>(null);
+  const [revealingContact, setRevealingContact] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [isPhoneRevealed, setIsPhoneRevealed] = useState(false);
+  const [checkingRevealStatus, setCheckingRevealStatus] = useState(true);
+  const [usage, setUsage] = useState<any>(null);
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const [inquirySubmitting, setInquirySubmitting] = useState(false);
+  const [inquiryError, setInquiryError] = useState('');
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [inquiryBudgetMin, setInquiryBudgetMin] = useState('');
+  const [inquiryBudgetMax, setInquiryBudgetMax] = useState('');
+  const [inquiryPreferredAt, setInquiryPreferredAt] = useState('');
+  const [openingDirections, setOpeningDirections] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -92,7 +112,7 @@ export default function ListingDetailPage() {
           const l = data.data || data;
           setListing(l);
           if (l.category?.id) {
-            api.get(`/listings/search?categoryId=${l.category.id}&limit=5`).then(({ data: simData }) => {
+            api.get(`/listings/search?categoryId=${l.category.id}&nearListingId=${l.id}&excludeId=${l.id}&limit=8`).then(({ data: simData }) => {
               const items = (simData.data?.items || simData.items || []).filter((s: any) => s.id !== l.id);
               setSimilarListings(items.slice(0, 4));
             }).catch(() => {});
@@ -112,6 +132,28 @@ export default function ListingDetailPage() {
     }
   }, [isAuthenticated, id]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.get('/subscriptions/usage').then(({ data }) => {
+      setUsage(data || null);
+    }).catch(() => {});
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !id) {
+      setCheckingRevealStatus(false);
+      return;
+    }
+    setCheckingRevealStatus(true);
+    api
+      .get(`/listings/${id}/reveal-status`)
+      .then(({ data }) => {
+        setIsPhoneRevealed(data?.isRevealed || false);
+      })
+      .catch(() => {})
+      .finally(() => setCheckingRevealStatus(false));
+  }, [isAuthenticated, id]);
+
   const handleSave = async () => {
     if (!isAuthenticated) { router.push('/login'); return; }
     setSaving(true);
@@ -126,14 +168,114 @@ export default function ListingDetailPage() {
     router.push(`/chat?listingId=${id}`);
   };
 
+  const handleRevealContact = async () => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    if (contactInfo) {
+      // Already revealed, just return
+      return;
+    }
+
+    setRevealingContact(true);
+    setContactError('');
+    try {
+      const { data } = await api.post(`/listings/${id}/reveal-contact`);
+      setContactInfo(data?.owner || null);
+      setIsPhoneRevealed(true);
+    } catch (err: any) {
+      setContactError(err.response?.data?.message || 'Unable to reveal contact right now');
+    } finally {
+      setRevealingContact(false);
+    }
+  };
+
+  const handleCreateInquiry = async () => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    if (!listing?.id) {
+      return;
+    }
+
+    setInquirySubmitting(true);
+    setInquiryError('');
+
+    try {
+      const payload: any = {
+        listingId: listing.id,
+        source: 'listing_page',
+      };
+
+      if (inquiryMessage.trim()) payload.message = inquiryMessage.trim();
+      if (inquiryBudgetMin.trim()) payload.budgetMin = Number(inquiryBudgetMin);
+      if (inquiryBudgetMax.trim()) payload.budgetMax = Number(inquiryBudgetMax);
+      if (inquiryPreferredAt.trim()) payload.preferredAt = new Date(inquiryPreferredAt).toISOString();
+
+      const { data } = await api.post('/inquiries', payload);
+      const inquiry = data || null;
+
+      setInquiryOpen(false);
+      setInquiryMessage('');
+      setInquiryBudgetMin('');
+      setInquiryBudgetMax('');
+      setInquiryPreferredAt('');
+
+      if (inquiry?.id) {
+        router.push(`/inquiries/${inquiry.id}`);
+      } else {
+        router.push('/inquiries');
+      }
+    } catch (err: any) {
+      const message = err.response?.data?.message || 'Unable to create inquiry right now';
+      if (typeof message === 'string' && message.toLowerCase().includes('inquiry limit reached')) {
+        setInquiryError(`${message} Upgrade your plan to continue.`);
+      } else {
+        setInquiryError(message);
+      }
+    } finally {
+      setInquirySubmitting(false);
+    }
+  };
+
   const handleShare = async () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      navigator.share({ title: listing?.title, url });
+    const browser = globalThis as any;
+    const url = browser?.location?.href || '';
+    if (browser?.navigator?.share) {
+      browser.navigator.share({ title: listing?.title, url });
     } else {
-      await navigator.clipboard.writeText(url);
+      await browser?.navigator?.clipboard?.writeText?.(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleGetDirections = async () => {
+    if (!listing?.latitude || !listing?.longitude) return;
+
+    const destination = `${listing.latitude},${listing.longitude}`;
+    setOpeningDirections(true);
+
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      const origin = `${latitude},${longitude}`;
+      globalThis.open(
+        `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } catch {
+      globalThis.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } finally {
+      setOpeningDirections(false);
     }
   };
 
@@ -305,15 +447,38 @@ export default function ListingDetailPage() {
                 <svg className="h-5 w-5 text-primary-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
                 Location
               </h2>
+
+              {typeof listing.latitude === 'number' && typeof listing.longitude === 'number' && (
+                <div className="mt-4 overflow-hidden rounded-xl border border-surface-200">
+                  <ListingLocationMap
+                    latitude={listing.latitude}
+                    longitude={listing.longitude}
+                    markerLabel={listing.title}
+                    className="h-64 w-full"
+                  />
+                </div>
+              )}
+
               <div className="mt-4 space-y-2 text-sm text-surface-500">
                 {listing.address && <p className="font-medium text-slate-700">{listing.address}</p>}
                 <p>{listing.city}, {listing.state}{listing.pincode ? ` - ${listing.pincode}` : ''}</p>
               </div>
               {listing.latitude && listing.longitude && (
-                <a href={`https://www.google.com/maps?q=${listing.latitude},${listing.longitude}`} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-surface-50 px-4 py-2.5 text-sm font-medium text-primary-600 transition-colors hover:bg-primary-50">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
-                  Open in Google Maps
-                </a>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGetDirections}
+                    disabled={openingDirections}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20.25l10.5-16.5-16.5 10.5 6.75 1.5 1.5 6.75z" /></svg>
+                    {openingDirections ? 'Opening...' : 'Get Directions'}
+                  </button>
+                  <a href={`https://www.google.com/maps?q=${listing.latitude},${listing.longitude}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-surface-50 px-4 py-2.5 text-sm font-medium text-primary-600 transition-colors hover:bg-primary-50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                    Open in Google Maps
+                  </a>
+                </div>
               )}
             </div>
 
@@ -350,6 +515,14 @@ export default function ListingDetailPage() {
                 </div>
                 {!isOwner && (
                   <div className="space-y-2.5 p-5">
+                    <button onClick={() => setInquiryOpen(true)} className="btn-secondary w-full py-3">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3h5.25m-7.5 9l-1.286-3.857A2.25 2.25 0 015.478 13.5H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v8.25c0 .966.784 1.75 1.75 1.75h.75l1.25 3.75z" /></svg>
+                      Send Inquiry
+                    </button>
+                    <Link href={`/bookings/new?listingId=${listing.id}`} className="btn-primary w-full py-3">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5M8.25 12h7.5m-7.5 5.25h7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A2.25 2.25 0 016 3h12a2.25 2.25 0 012.25 2.25v13.5A2.25 2.25 0 0118 21H6a2.25 2.25 0 01-2.25-2.25V5.25z" /></svg>
+                      Book Now
+                    </Link>
                     <button onClick={handleContact} className="btn-primary w-full py-3">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>
                       Chat with Owner
@@ -387,6 +560,92 @@ export default function ListingDetailPage() {
                 <div className="mt-4 rounded-xl bg-surface-50 px-4 py-2.5 text-center">
                   <p className="text-xs text-surface-400">Member since {new Date(listing.createdAt).getFullYear()}</p>
                 </div>
+
+                {!isOwner && (
+                  <div className="mt-4 space-y-3">
+                    {contactInfo ? (
+                      <div className="rounded-xl border border-surface-200 bg-white px-4 py-3 text-sm">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-slate-900">Contact Details</p>
+                          {contactInfo.phone && <p className="text-surface-500">Phone: {contactInfo.phone}</p>}
+                          {contactInfo.email && <p className="text-surface-500">Email: {contactInfo.email}</p>}
+                        </div>
+                      </div>
+                    ) : isPhoneRevealed ? (
+                      <div className="rounded-xl border border-surface-200 bg-white px-4 py-3 text-sm">
+                        <div className="space-y-2">
+                          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+                            <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" /></svg>
+                            Phone Revealed
+                          </p>
+                          <p className="text-xs text-surface-400">Tap reveal button to load phone details</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-surface-200 bg-white px-4 py-3 text-sm">
+                        <p className="text-surface-400 mb-2">Reveal contact to see owner phone and email.</p>
+                      </div>
+                    )}
+                    <button
+                      onClick={handleRevealContact}
+                      disabled={revealingContact || checkingRevealStatus}
+                      className={`w-full py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                        isPhoneRevealed
+                          ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {revealingContact || checkingRevealStatus ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                          Loading...
+                        </>
+                      ) : isPhoneRevealed ? (
+                        <>
+                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M2.25 6.75c0 .414.336.75.75.75h16.5a.75.75 0 00.75-.75V4.5a.75.75 0 00-.75-.75H3a.75.75 0 00-.75.75v2.25z" /><path d="M2.25 9h19.5a.75.75 0 00-.75.75v9a.75.75 0 00.75.75H2.25a.75.75 0 00-.75-.75v-9a.75.75 0 00.75-.75zm1.5.75a.75.75 0 001.5 0v-2.25a.25.25 0 01.25-.25h12a.25.25 0 01.25.25v2.25a.75.75 0 001.5 0V6a.75.75 0 00-.75-.75H3.75a.75.75 0 00-.75.75v3.75z" /></svg>
+                          View Phone
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                          Reveal Phone
+                        </>
+                      )}
+                    </button>
+                    {contactError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {contactError}
+                        {contactError.toLowerCase().includes('limit reached') && (
+                          <Link href="/subscription" className="ml-1 font-semibold text-red-700 hover:text-red-800 underline">
+                            Upgrade
+                          </Link>
+                        )}
+                      </div>
+                    )}
+
+                    {usage && (
+                      <div className="rounded-xl border border-surface-200 bg-surface-50 px-3 py-2 text-xs text-surface-500">
+                        <p>
+                          Contact reveals: {usage?.usage?.contactReveals?.used || 0}/
+                          {usage?.usage?.contactReveals?.limit && usage?.usage?.contactReveals?.limit > 0
+                            ? usage.usage.contactReveals.limit
+                            : '∞'}
+                        </p>
+                        <p>
+                          Inquiries this month: {usage?.usage?.inquiriesThisMonth?.used || 0}/
+                          {usage?.usage?.inquiriesThisMonth?.limit && usage?.usage?.inquiriesThisMonth?.limit > 0
+                            ? usage.usage.inquiriesThisMonth.limit
+                            : '∞'}
+                        </p>
+                        {usage?.usage?.inquiriesThisMonth?.limit && usage?.usage?.inquiriesThisMonth?.limit > 0 && (
+                          <Link href="/subscription" className="mt-1 inline-block font-semibold text-primary-600 hover:text-primary-700">
+                            Upgrade plan for higher limits
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Share & Actions */}
@@ -440,6 +699,83 @@ export default function ListingDetailPage() {
           </div>
         )}
       </div>
+
+      {inquiryOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45 px-4" onClick={() => setInquiryOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">Create Inquiry</h3>
+            <p className="mt-1 text-sm text-slate-500">Send your requirement to the owner and track updates in timeline.</p>
+
+            {inquiryError && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {inquiryError}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Message</label>
+                <textarea
+                  value={inquiryMessage}
+                  onChange={(e: any) => setInquiryMessage(e.target.value)}
+                  rows={4}
+                  maxLength={3000}
+                  placeholder="Tell the owner your intended dates, use-case, and questions"
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Budget Min (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={inquiryBudgetMin}
+                    onChange={(e: any) => setInquiryBudgetMin(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Budget Max (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={inquiryBudgetMax}
+                    onChange={(e: any) => setInquiryBudgetMax(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Preferred Date/Time</label>
+                <input
+                  type="datetime-local"
+                  value={inquiryPreferredAt}
+                  onChange={(e: any) => setInquiryPreferredAt(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button onClick={() => setInquiryOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateInquiry}
+                disabled={inquirySubmitting}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {inquirySubmitting ? 'Submitting...' : 'Send Inquiry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox */}
       {lightboxOpen && listing.images.length > 0 && (

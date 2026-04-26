@@ -5,6 +5,7 @@ export interface IUser {
   email: string;
   role: UserRole;
   isEmailVerified: boolean;
+  isPhoneVerified?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -19,6 +20,10 @@ export interface IUserProfile {
   bio?: string;
   city?: string;
   state?: string;
+  country?: string;
+  pincode?: string;
+  dob?: string;
+  gender?: string;
   latitude?: number;
   longitude?: number;
 }

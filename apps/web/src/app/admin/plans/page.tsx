@@ -5,15 +5,27 @@ import api from '@/lib/api';
 
 interface Plan {
   id: string; name: string; slug: string; description?: string;
+  audience: 'OWNER' | 'RENTER' | 'AGENCY';
   price: number; currency: string; interval: string;
-  maxListings: number; maxContactReveals: number; features: any;
-  isActive: boolean; sortOrder: number;
+  maxListings: number; maxContactReveals: number; maxBookingsPerMonth: number; maxInquiriesPerMonth: number;
+  trialDays: number; razorpayPlanId?: string | null;
+  features: any;
+  isActive: boolean; isPublic: boolean; sortOrder: number;
   _count: { subscriptions: number };
 }
 
 const emptyForm = {
-  name: '', slug: '', description: '', price: 0, currency: 'INR', interval: 'monthly',
-  maxListings: 5, maxContactReveals: 10, features: '', isActive: true, sortOrder: 0,
+  name: '', slug: '', description: '', audience: 'OWNER', price: 0, currency: 'INR', interval: 'monthly',
+  maxListings: 5, maxContactReveals: 10, maxBookingsPerMonth: 0, maxInquiriesPerMonth: 0,
+  trialDays: 0, razorpayPlanId: '', features: '', isActive: true, isPublic: true, sortOrder: 0,
+};
+
+const showAlert = (message: string) => {
+  (globalThis as any)?.alert?.(message);
+};
+
+const showConfirm = (message: string) => {
+  return Boolean((globalThis as any)?.confirm?.(message));
 };
 
 export default function AdminPlansPage() {
@@ -45,13 +57,19 @@ export default function AdminPlansPage() {
       name: plan.name,
       slug: plan.slug,
       description: plan.description || '',
+      audience: plan.audience,
       price: Number(plan.price),
       currency: plan.currency,
       interval: plan.interval,
       maxListings: plan.maxListings,
       maxContactReveals: plan.maxContactReveals,
+      maxBookingsPerMonth: plan.maxBookingsPerMonth,
+      maxInquiriesPerMonth: plan.maxInquiriesPerMonth,
+      trialDays: plan.trialDays,
+      razorpayPlanId: plan.razorpayPlanId || '',
       features: plan.features ? JSON.stringify(plan.features, null, 2) : '',
       isActive: plan.isActive,
+      isPublic: plan.isPublic,
       sortOrder: plan.sortOrder,
     });
     setEditingId(plan.id);
@@ -74,6 +92,10 @@ export default function AdminPlansPage() {
         price: Number(form.price),
         maxListings: Number(form.maxListings),
         maxContactReveals: Number(form.maxContactReveals),
+        maxBookingsPerMonth: Number(form.maxBookingsPerMonth),
+        maxInquiriesPerMonth: Number(form.maxInquiriesPerMonth),
+        trialDays: Number(form.trialDays),
+        razorpayPlanId: form.razorpayPlanId?.trim() || null,
         sortOrder: Number(form.sortOrder),
         features: form.features ? JSON.parse(form.features) : null,
       };
@@ -85,7 +107,7 @@ export default function AdminPlansPage() {
       resetForm();
       fetchPlans();
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to save plan');
+      showAlert(err.response?.data?.message || err.message || 'Failed to save plan');
     } finally {
       setFormLoading(false);
     }
@@ -93,15 +115,15 @@ export default function AdminPlansPage() {
 
   const deletePlan = async (plan: Plan) => {
     if (plan._count.subscriptions > 0) {
-      alert(`Cannot delete "${plan.name}" — it has ${plan._count.subscriptions} active subscriptions.`);
+      showAlert(`Cannot delete "${plan.name}" - it has ${plan._count.subscriptions} active subscriptions.`);
       return;
     }
-    if (!confirm(`Delete "${plan.name}"? This cannot be undone.`)) return;
+    if (!showConfirm(`Delete "${plan.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/admin/plans/${plan.id}`);
       fetchPlans();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to delete plan');
+      showAlert(err.response?.data?.message || 'Failed to delete plan');
     }
   };
 
@@ -175,9 +197,13 @@ export default function AdminPlansPage() {
               <span className="text-sm text-slate-500">/{plan.interval}</span>
             </div>
 
+              <p className="mt-1 text-xs font-medium text-slate-500">Audience: {plan.audience}</p>
+
             <div className="mt-4 space-y-2">
               <LimitRow label="Max Listings" value={plan.maxListings === -1 ? 'Unlimited' : plan.maxListings.toString()} />
               <LimitRow label="Contact Reveals" value={plan.maxContactReveals === -1 ? 'Unlimited' : `${plan.maxContactReveals}/mo`} />
+                <LimitRow label="Bookings/Month" value={plan.maxBookingsPerMonth <= 0 ? 'Unlimited' : `${plan.maxBookingsPerMonth}`} />
+                <LimitRow label="Inquiries/Month" value={plan.maxInquiriesPerMonth <= 0 ? 'Unlimited' : `${plan.maxInquiriesPerMonth}`} />
             </div>
 
             {plan.description && (
@@ -232,39 +258,49 @@ export default function AdminPlansPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Name *</label>
-                  <input value={form.name} onChange={(e) => handleNameChange(e.target.value)} required
+                  <input value={form.name} onChange={(e: any) => handleNameChange(e.target.value)} required
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Slug *</label>
-                  <input value={form.slug} onChange={(e) => setForm(f => ({ ...f, slug: e.target.value }))} required
+                  <input value={form.slug} onChange={(e: any) => setForm(f => ({ ...f, slug: e.target.value }))} required
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
               </div>
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
-                <textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
+                <textarea value={form.description} onChange={(e: any) => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Audience</label>
+                  <select value={form.audience} onChange={(e: any) => setForm(f => ({ ...f, audience: e.target.value as any }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+                    <option value="OWNER">Owner</option>
+                    <option value="RENTER">Renter</option>
+                    <option value="AGENCY">Agency</option>
+                  </select>
+                </div>
+                <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Price (₹) *</label>
-                  <input type="number" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} required
+                  <input type="number" value={form.price} onChange={(e: any) => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} required
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Interval</label>
-                  <select value={form.interval} onChange={(e) => setForm(f => ({ ...f, interval: e.target.value }))}
+                  <select value={form.interval} onChange={(e: any) => setForm(f => ({ ...f, interval: e.target.value }))}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
                     <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
                     <option value="yearly">Yearly</option>
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Sort Order</label>
-                  <input type="number" value={form.sortOrder} onChange={(e) => setForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                  <input type="number" value={form.sortOrder} onChange={(e: any) => setForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
               </div>
@@ -272,28 +308,62 @@ export default function AdminPlansPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Max Listings (-1 = unlimited)</label>
-                  <input type="number" value={form.maxListings} onChange={(e) => setForm(f => ({ ...f, maxListings: parseInt(e.target.value) || 0 }))}
+                  <input type="number" value={form.maxListings} onChange={(e: any) => setForm(f => ({ ...f, maxListings: parseInt(e.target.value) || 0 }))}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Max Contact Reveals/mo (-1 = unlimited)</label>
-                  <input type="number" value={form.maxContactReveals} onChange={(e) => setForm(f => ({ ...f, maxContactReveals: parseInt(e.target.value) || 0 }))}
+                  <input type="number" value={form.maxContactReveals} onChange={(e: any) => setForm(f => ({ ...f, maxContactReveals: parseInt(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Max Bookings/Month (0 = unlimited)</label>
+                  <input type="number" value={form.maxBookingsPerMonth} onChange={(e: any) => setForm(f => ({ ...f, maxBookingsPerMonth: parseInt(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Max Inquiries/Month (0 = unlimited)</label>
+                  <input type="number" value={form.maxInquiriesPerMonth} onChange={(e: any) => setForm(f => ({ ...f, maxInquiriesPerMonth: parseInt(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Trial Days</label>
+                  <input type="number" value={form.trialDays} onChange={(e: any) => setForm(f => ({ ...f, trialDays: parseInt(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Razorpay Plan ID</label>
+                  <input value={form.razorpayPlanId} onChange={(e: any) => setForm(f => ({ ...f, razorpayPlanId: e.target.value }))}
+                    placeholder="plan_XXXXXXXX"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
                 </div>
               </div>
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Features (JSON array)</label>
-                <textarea value={form.features} onChange={(e) => setForm(f => ({ ...f, features: e.target.value }))} rows={3}
+                <textarea value={form.features} onChange={(e: any) => setForm(f => ({ ...f, features: e.target.value }))} rows={3}
                   placeholder='["Priority support", "Featured badge"]'
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none" />
               </div>
 
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.isActive}
-                  onChange={(e) => setForm(f => ({ ...f, isActive: e.target.checked }))}
+                  onChange={(e: any) => setForm(f => ({ ...f, isActive: e.target.checked }))}
                   className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                 Active
+              </label>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.isPublic}
+                  onChange={(e: any) => setForm(f => ({ ...f, isPublic: e.target.checked }))}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                Publicly visible
               </label>
             </div>
 

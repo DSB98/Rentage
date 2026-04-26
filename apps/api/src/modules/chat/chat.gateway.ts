@@ -14,11 +14,24 @@ import { ChatService } from './chat.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessageType } from '@rentage/shared-types';
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3100',
+  'http://localhost:3111',
+];
+
 @WebSocketGateway({
   cors: {
-    origin: (process.env.ALLOWED_ORIGINS || process.env.APP_URL || 'http://localhost:3000')
-      .split(',')
-      .map((o) => o.trim()),
+    origin: Array.from(
+      new Set([
+        ...DEFAULT_ALLOWED_ORIGINS,
+        ...[process.env.ALLOWED_ORIGINS, process.env.APP_URL]
+          .filter(Boolean)
+          .flatMap((value) => value!.split(','))
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+      ]),
+    ),
     credentials: true,
   },
   namespace: '/chat',

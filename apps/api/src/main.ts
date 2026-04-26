@@ -8,6 +8,12 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters';
 import { TransformInterceptor } from './common/interceptors';
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3100',
+  'http://localhost:3111',
+];
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: false,
@@ -23,10 +29,13 @@ async function bootstrap() {
   app.use(compression());
 
   // CORS allow-list (web + mobile origins)
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.APP_URL || 'http://localhost:3000')
-    .split(',')
-    .map((o) => o.trim())
+  const configuredOrigins = [process.env.ALLOWED_ORIGINS, process.env.APP_URL]
+    .filter(Boolean)
+    .flatMap((value) => value!.split(','))
+    .map((origin) => origin.trim())
     .filter(Boolean);
+
+  const allowedOrigins = Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]));
 
   app.enableCors({
     origin: (origin, callback) => {

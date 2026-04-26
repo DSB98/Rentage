@@ -12,6 +12,12 @@ import { UploadModule } from './modules/upload/upload.module';
 import { HealthModule } from './modules/health/health.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { InquiryModule } from './modules/inquiry/inquiry.module';
+import { KycModule } from './modules/kyc/kyc.module';
+import { BookingModule } from './modules/booking/booking.module';
+import { ReviewModule } from './modules/review/review.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { BannerModule } from './modules/banner/banner.module';
 
 @Module({
   imports: [
@@ -35,6 +41,12 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     HealthModule,
     AdminModule,
     NotificationsModule,
+    InquiryModule,
+    KycModule,
+    BookingModule,
+    ReviewModule,
+    SubscriptionModule,
+    BannerModule,
   ],
   providers: [
     {

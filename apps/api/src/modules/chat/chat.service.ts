@@ -1,14 +1,21 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessageType } from '@rentage/shared-types';
+import { InquiryService } from '../inquiry/inquiry.service';
 
 @Injectable()
 export class ChatService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private inquiryService: InquiryService,
+  ) {}
 
   async getOrCreateConversation(listingId: string, renterId: string) {
     const listing = await this.prisma.listing.findUnique({ where: { id: listingId } });
     if (!listing) throw new NotFoundException('Listing not found');
+    if (listing.ownerId === renterId) {
+      throw new BadRequestException('Cannot start chat on your own listing');
+    }
 
     let conversation = await this.prisma.conversation.findUnique({
       where: { listingId_renterId: { listingId, renterId } },
@@ -20,18 +27,35 @@ export class ChatService {
     });
 
     if (!conversation) {
-      conversation = await this.prisma.conversation.create({
-        data: {
-          listingId,
-          ownerId: listing.ownerId,
-          renterId,
-        },
+      // Starting a chat should always have inquiry context for the same listing.
+      await this.inquiryService.create(renterId, {
+        listingId,
+        source: 'chat',
+      });
+
+      conversation = await this.prisma.conversation.findUnique({
+        where: { listingId_renterId: { listingId, renterId } },
         include: {
           listing: { select: { id: true, title: true, images: { take: 1 } } },
           owner: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
           renter: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
         },
       });
+
+      if (!conversation) {
+        conversation = await this.prisma.conversation.create({
+          data: {
+            listingId,
+            ownerId: listing.ownerId,
+            renterId,
+          },
+          include: {
+            listing: { select: { id: true, title: true, images: { take: 1 } } },
+            owner: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
+            renter: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
+          },
+        });
+      }
     }
 
     return conversation;

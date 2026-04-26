@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { useAuthStore } from '@/stores/auth.store';
 
 interface MyListing {
   id: string;
@@ -31,16 +29,30 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 };
 
 export default function MyListingsPage() {
-  const router = useRouter();
-  const { user } = useAuthStore();
   const [listings, setListings] = useState<MyListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{ used: number; limit: number | null } | null>(null);
 
   useEffect(() => {
     fetchListings();
   }, [filter]);
+
+  useEffect(() => {
+    api
+      .get('/subscriptions/usage')
+      .then(({ data }) => {
+        const listingUsage = data?.usage?.listings;
+        if (listingUsage) {
+          setUsage({
+            used: listingUsage.used || 0,
+            limit: listingUsage.limit ?? null,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchListings = async () => {
     setLoading(true);
@@ -56,13 +68,13 @@ export default function MyListingsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this listing?')) return;
+    if (!(globalThis as any)?.confirm?.('Are you sure you want to delete this listing?')) return;
     setDeleting(id);
     try {
       await api.delete(`/listings/${id}`);
       setListings((prev) => prev.filter((l) => l.id !== id));
     } catch {
-      alert('Failed to delete listing');
+      (globalThis as any)?.alert?.('Failed to delete listing');
     } finally {
       setDeleting(null);
     }
@@ -72,11 +84,27 @@ export default function MyListingsPage() {
     const newStatus = listing.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     try {
       await api.patch(`/listings/${listing.id}`, { status: newStatus });
-      setListings((prev) =>
-        prev.map((l) => (l.id === listing.id ? { ...l, status: newStatus } : l))
-      );
-    } catch {
-      alert('Failed to update listing');
+      await fetchListings();
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        'Failed to update listing';
+      if (typeof message === 'string' && message.toLowerCase().includes('active listing limit reached')) {
+        (globalThis as any)?.alert?.(`${message} To activate this listing, pause one currently active listing or upgrade your plan.`);
+      } else {
+        (globalThis as any)?.alert?.(message);
+      }
+    }
+  };
+
+  const handleResubmit = async (listingId: string) => {
+    try {
+      await api.post(`/listings/${listingId}/resubmit`);
+      await fetchListings();
+    } catch (err: any) {
+      (globalThis as any)?.alert?.(err?.response?.data?.message || 'Failed to resubmit listing');
     }
   };
 
@@ -92,6 +120,11 @@ export default function MyListingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Listings</h1>
           <p className="mt-1 text-sm text-gray-500">{listings.length} total listings</p>
+          {usage && (
+            <p className="mt-1 text-xs text-indigo-700">
+              Plan usage: {usage.used}/{usage.limit && usage.limit > 0 ? usage.limit : '∞'} listings used
+            </p>
+          )}
         </div>
         <Link
           href="/create-listing"
@@ -207,6 +240,14 @@ export default function MyListingsPage() {
                           className="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
                         >
                           {listing.status === 'ACTIVE' ? 'Pause' : 'Activate'}
+                        </button>
+                      ) : null}
+                      {listing.status === 'REJECTED' ? (
+                        <button
+                          onClick={() => handleResubmit(listing.id)}
+                          className="rounded px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                        >
+                          Resubmit
                         </button>
                       ) : null}
                       <Link
