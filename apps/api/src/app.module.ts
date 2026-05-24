@@ -23,12 +23,13 @@ import { BannerModule } from './modules/banner/banner.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '../../.env',
+      // Root .env for shared/production config; .env for local API-only overrides
+      envFilePath: ['../../.env', '.env'],
     }),
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 1 minute
-        limit: 60, // 60 requests per minute
+        limit: 300, // 300 requests per minute (increased for rapid dashboard navigation)
       },
     ]),
     PrismaModule,

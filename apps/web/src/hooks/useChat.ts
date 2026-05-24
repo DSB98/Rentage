@@ -1,7 +1,54 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import api from '@/lib/api';
 import { socketManager } from '@/lib/socket';
 import { useAuthStore } from '@/stores/auth.store';
+
+// Module-level dedup — prevents multiple useChat() instances from creating duplicate toasts
+const toastedMessageIds = new Set<string>();
+
+// Singleton AudioContext — reused across all calls; unlocked on first user interaction
+let _audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  try {
+    const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!Ctor) return null;
+    if (!_audioCtx) _audioCtx = new Ctor() as AudioContext;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch {
+    return null;
+  }
+}
+
+function playNotificationSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.08);
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.5);
+  } catch {
+    // silently fail if audio is blocked
+  }
+}
+
+export interface ChatToast {
+  toastId: string;
+  conversationId: string;
+  senderName: string;
+  avatar?: string;
+  message: string;
+}
 
 interface Message {
   id: string;
@@ -28,6 +75,8 @@ interface ApiMessage {
 interface Conversation {
   id: string;
   listingId: string;
+  ownerId?: string;
+  renterId?: string;
   listingTitle: string;
   participantId: string;
   participantName: string;
@@ -35,11 +84,23 @@ interface Conversation {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  inquiry?: {
+    id: string;
+    status: string;
+    source?: string | null;
+    message?: string | null;
+    budgetMin?: number | null;
+    budgetMax?: number | null;
+    preferredAt?: string | null;
+    createdAt?: string;
+  } | null;
 }
 
 interface ApiConversation {
   id: string;
   listingId: string;
+  ownerId?: string;
+  renterId?: string;
   listing?: { id: string; title?: string | null } | null;
   otherUser?: {
     id: string;
@@ -52,12 +113,24 @@ interface ApiConversation {
   } | null;
   lastMessageAt?: string | null;
   unreadCount?: number | null;
+  inquiry?: {
+    id: string;
+    status: string;
+    source?: string | null;
+    message?: string | null;
+    budgetMin?: number | null;
+    budgetMax?: number | null;
+    preferredAt?: string | null;
+    createdAt?: string;
+  } | null;
 }
 
 function normalizeConversation(conversation: ApiConversation): Conversation {
   return {
     id: conversation.id,
     listingId: conversation.listingId,
+    ownerId: conversation.ownerId,
+    renterId: conversation.renterId,
     listingTitle: conversation.listing?.title?.trim() || 'Untitled listing',
     participantId: conversation.otherUser?.id || '',
     participantName: conversation.otherUser?.profile?.fullName?.trim() || 'Unknown user',
@@ -68,6 +141,7 @@ function normalizeConversation(conversation: ApiConversation): Conversation {
       conversation.lastMessage?.createdAt ||
       new Date(0).toISOString(),
     unreadCount: conversation.unreadCount ?? 0,
+    inquiry: conversation.inquiry || null,
   };
 }
 
@@ -90,6 +164,44 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesRef = useRef<Map<string, Message[]>>(new Map());
+
+  // Refs for access inside event handler closures
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const conversationsRef = useRef<Conversation[]>([]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
+  // In-app notification toasts
+  const [toasts, setToasts] = useState<ChatToast[]>([]);
+  const dismissToast = useCallback((toastId: string) => {
+    setToasts((prev) => prev.filter((t) => t.toastId !== toastId));
+  }, []);
+
+  // Pre-warm AudioContext on first user gesture so sound plays instantly on notification
+  useEffect(() => {
+    const unlock = () => getAudioContext();
+    window.addEventListener('click', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    window.addEventListener('touchstart', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
+
+  // When navigating to a conversation page, immediately zero out its unread count
+  // in local state — no server round-trip needed (user is looking at it).
+  useEffect(() => {
+    const match = pathname?.match(/^\/chat\/([^/]+)$/);
+    if (match) {
+      const conversationId = match[1];
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
+      );
+    }
+  }, [pathname]);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -114,6 +226,23 @@ export function useChat() {
       return normalizeConversation(data);
     } catch (err: any) {
       throw new Error(err?.response?.data?.message || 'Failed to create conversation');
+    }
+  }, []);
+
+  const fetchConversationById = useCallback(async (conversationId: string) => {
+    try {
+      const { data } = await api.get<ApiConversation>(`/chat/conversations/${conversationId}`);
+      const normalized = normalizeConversation(data);
+      setConversations((prev) => {
+        const existing = prev.find((item) => item.id === normalized.id);
+        if (existing) {
+          return prev.map((item) => (item.id === normalized.id ? { ...item, ...normalized } : item));
+        }
+        return [normalized, ...prev];
+      });
+      return normalized;
+    } catch (err: any) {
+      throw new Error(err?.response?.data?.message || 'Failed to fetch conversation');
     }
   }, []);
 
@@ -210,6 +339,34 @@ export function useChat() {
       );
       messagesRef.current.set(conversationId, [...filtered, msg]);
 
+      // In-app notification for messages from others
+      if (msg.senderId !== user?.id && !toastedMessageIds.has(msg.id)) {
+        const isViewingThisConversation = pathnameRef.current === `/chat/${conversationId}`;
+        if (!isViewingThisConversation) {
+          toastedMessageIds.add(msg.id);
+          playNotificationSound();
+          const conv = conversationsRef.current.find((c) => c.id === conversationId);
+          const toastId = `toast-${msg.id}`;
+          setToasts((prev) => {
+            const capped = prev.length >= 4 ? prev.slice(1) : prev;
+            return [
+              ...capped,
+              {
+                toastId,
+                conversationId,
+                senderName: conv?.participantName || 'Someone',
+                avatar: conv?.participantAvatar,
+                message: msg.message || 'Sent a message',
+              },
+            ];
+          });
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.toastId !== toastId));
+            toastedMessageIds.delete(msg.id);
+          }, 5000);
+        }
+      }
+
       setConversations((prev) =>
         prev.map((conversation) =>
           conversation.id === conversationId
@@ -217,8 +374,11 @@ export function useChat() {
                 ...conversation,
                 lastMessage: msg.message || conversation.lastMessage,
                 lastMessageAt: msg.createdAt || conversation.lastMessageAt,
+                // Don't increment if: own message OR currently viewing this conversation
                 unreadCount:
-                  msg.senderId === user?.id ? conversation.unreadCount : conversation.unreadCount + 1,
+                  msg.senderId === user?.id || pathnameRef.current === `/chat/${conversationId}`
+                    ? conversation.unreadCount
+                    : conversation.unreadCount + 1,
               }
             : conversation,
         ),
@@ -230,8 +390,21 @@ export function useChat() {
       // Handle typing indicator UI update here
     };
 
+    const handleMessagesMarkedRead = (data: any) => {
+      const conversationId = data?.conversationId;
+      if (!conversationId) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
+      );
+    };
+
     socketManager.onNewMessage(handleNewMessage);
     socketManager.onTyping(handleTyping);
+
+    const socket = socketManager.getSocket();
+    if (socket) {
+      socket.on('messages_marked_read', handleMessagesMarkedRead);
+    }
 
     // Fetch initial conversations
     fetchConversations();
@@ -241,6 +414,7 @@ export function useChat() {
       if (socket) {
         socket.off('new_message', handleNewMessage);
         socket.off('typing', handleTyping);
+        socket.off('messages_marked_read', handleMessagesMarkedRead);
       }
     };
   }, [user?.id, user?.profile?.fullName, fetchConversations]);
@@ -254,10 +428,13 @@ export function useChat() {
     loading,
     error,
     fetchConversations,
+    fetchConversationById,
     getOrCreateConversation,
     fetchMessages,
     sendMessage,
     getMessagesForConversation,
     isSocketConnected: socketManager.isConnected(),
+    toasts,
+    dismissToast,
   };
 }

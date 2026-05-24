@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth.store';
+import { useChat } from '@/hooks/useChat';
+import NotificationBell from '@/components/NotificationBell';
+import MessageToastContainer from '@/components/MessageToastContainer';
 
 const NAV_ITEMS = (canManageListings: boolean, isAdmin: boolean) => {
   const items = [
@@ -44,6 +47,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { user, isLoading, isAuthenticated, loadUser, logout } = useAuthStore();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Compute total unread message count for sidebar badge
+  const { conversations, toasts, dismissToast } = useChat();
+  const totalUnreadMessages = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
   useEffect(() => {
     loadUser();
@@ -54,6 +62,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/login');
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Close mobile drawer on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   if (isLoading) {
     return (
@@ -77,10 +90,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-slate-200 bg-white transition-all duration-300 ${
-          sidebarCollapsed ? 'w-[68px]' : 'w-60'
+        className={`fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-slate-200 bg-white transition-all duration-300 ${
+          sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-60'
+        } ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Logo */}
@@ -91,9 +114,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-lg font-bold text-slate-900">Rentage</span>
             </Link>
           )}
+          {/* Desktop: collapse/expand toggle */}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="hidden rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:flex"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {sidebarCollapsed ? (
@@ -101,6 +125,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ) : (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
               )}
+            </svg>
+          </button>
+          {/* Mobile: close drawer */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden"
+            aria-label="Close menu"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -128,8 +162,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+              const isChatItem = item.href === '/chat';
               return (
-                <li key={item.href}>
+                <li key={item.href} className="relative">
                   <Link
                     href={item.href}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
@@ -140,7 +175,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     title={sidebarCollapsed ? item.label : undefined}
                   >
                     <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
-                    {!sidebarCollapsed && <span>{item.label}</span>}
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="flex-1">{item.label}</span>
+                        {isChatItem && totalUnreadMessages > 0 && (
+                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[10px] font-bold text-white">
+                            {totalUnreadMessages > 9 ? '9+' : totalUnreadMessages}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {sidebarCollapsed && isChatItem && totalUnreadMessages > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold text-white">
+                        {totalUnreadMessages > 9 ? '9+' : totalUnreadMessages}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -162,15 +211,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className={`flex flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-[68px]' : 'ml-60'}`}>
+      {/* Main content — no left margin on mobile (sidebar is an overlay) */}
+      <div className={`flex flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-[68px]' : 'lg:ml-60'}`}>
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur-sm">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Dashboard</h2>
-            <p className="text-xs text-slate-500">Welcome back, {user?.profile?.fullName}</p>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-4 backdrop-blur-sm sm:px-6">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden"
+              aria-label="Open menu"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Dashboard</h2>
+              <p className="text-xs text-slate-500">Welcome back, {user?.profile?.fullName}</p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
                 {user?.profile?.fullName?.charAt(0) || 'U'}
@@ -184,8 +246,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto bg-slate-50 p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-slate-50 p-3 sm:p-6">{children}</main>
       </div>
+      <MessageToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

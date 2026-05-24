@@ -317,33 +317,32 @@ export default function ListingDetailPage() {
   const isOwner = user?.id === listing.owner?.id;
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen overflow-x-hidden bg-surface-50">
       <Header />
 
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 lg:px-6">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-surface-400">
-          <Link href="/" className="transition-colors hover:text-slate-700">Home</Link>
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-          <Link href="/listings" className="transition-colors hover:text-slate-700">Listings</Link>
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-          <Link href={`/listings?category=${listing.category?.slug}`} className="transition-colors hover:text-slate-700">
+        <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm text-surface-400">
+          <Link href="/" className="shrink-0 transition-colors hover:text-slate-700">Home</Link>
+          <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <Link href="/listings" className="shrink-0 transition-colors hover:text-slate-700">Listings</Link>
+          <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <Link href={`/listings?category=${listing.category?.slug}`} className="shrink-0 transition-colors hover:text-slate-700">
             {listing.category?.name}
           </Link>
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-          <span className="line-clamp-1 text-slate-600">{listing.title}</span>
+          <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <span className="min-w-0 truncate text-slate-600">{listing.title}</span>
         </nav>
 
-        <div className="mt-5 grid gap-6 lg:grid-cols-5">
+        <div className="mt-4 grid gap-4 lg:gap-6 lg:grid-cols-5">
           {/* LEFT: Gallery + Details */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="min-w-0 lg:col-span-3 space-y-4">
             {/* Image Gallery */}
             <div>
               {listing.images.length > 0 ? (
                 <div className="space-y-3">
                   <div
-                    className="group relative cursor-pointer overflow-hidden rounded-2xl bg-surface-100"
-                    style={{ height: '420px' }}
+                    className="group relative cursor-pointer overflow-hidden rounded-2xl bg-surface-100 h-[220px] sm:h-[360px] lg:h-[420px]"
                     onClick={() => setLightboxOpen(true)}
                   >
                     <img
@@ -408,7 +407,7 @@ export default function ListingDetailPage() {
 
             {/* Amenities / Specifications */}
             {listing.amenities?.length > 0 && (
-              <div className="card p-6">
+              <div className="card p-4 sm:p-6">
                 <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                   <svg className="h-5 w-5 text-primary-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
                   {listing.category?.slug && ['homes', 'flats', 'pgs'].includes(listing.category.slug) ? 'Property Details' : listing.category?.slug && ['cars', 'bikes'].includes(listing.category.slug) ? 'Vehicle Specifications' : 'Details & Specifications'}
@@ -433,7 +432,7 @@ export default function ListingDetailPage() {
             )}
 
             {/* Description */}
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
               <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                 <svg className="h-5 w-5 text-primary-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                 Description
@@ -442,7 +441,7 @@ export default function ListingDetailPage() {
             </div>
 
             {/* Location */}
-            <div className="card p-6">
+            <div className="card overflow-hidden p-4 sm:p-6">
               <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
                 <svg className="h-5 w-5 text-primary-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
                 Location
@@ -489,8 +488,8 @@ export default function ListingDetailPage() {
           </div>
 
           {/* RIGHT: Sidebar */}
-          <div className="lg:col-span-2">
-            <div className="sticky top-20 space-y-4">
+          <div className="min-w-0 lg:col-span-2">
+            <div className="sticky top-20 space-y-3 sm:space-y-4">
               {/* Title (desktop) */}
               <div className="hidden lg:block">
                 <div className="flex flex-wrap gap-2">
@@ -506,7 +505,7 @@ export default function ListingDetailPage() {
 
               {/* Price Card */}
               <div className="card overflow-hidden">
-                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-5 text-center text-white">
+                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-4 py-4 sm:px-6 sm:py-5 text-center text-white">
                   <p className="text-3xl font-bold">₹{listing.price.toLocaleString('en-IN')}</p>
                   <p className="mt-1 text-sm text-primary-100">per {PERIOD_LABELS[listing.rentPeriod] || listing.rentPeriod.toLowerCase()}</p>
                   {listing.securityDeposit && (
@@ -514,7 +513,7 @@ export default function ListingDetailPage() {
                   )}
                 </div>
                 {!isOwner && (
-                  <div className="space-y-2.5 p-5">
+                  <div className="space-y-2.5 p-3 sm:p-5">
                     <button onClick={() => setInquiryOpen(true)} className="btn-secondary w-full py-3">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3h5.25m-7.5 9l-1.286-3.857A2.25 2.25 0 015.478 13.5H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v8.25c0 .966.784 1.75 1.75 1.75h.75l1.25 3.75z" /></svg>
                       Send Inquiry
@@ -541,7 +540,7 @@ export default function ListingDetailPage() {
               </div>
 
               {/* Owner Card */}
-              <div className="card p-5">
+              <div className="card p-4 sm:p-5">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-surface-300">Listed by</p>
                 <div className="mt-3 flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-lg font-bold text-white shadow-sm">
@@ -664,7 +663,7 @@ export default function ListingDetailPage() {
 
         {/* Similar Listings */}
         {similarListings.length > 0 && (
-          <div className="mt-16">
+          <div className="mt-8 sm:mt-16">
             <div className="flex items-end justify-between">
               <div>
                 <h2 className="section-heading">Similar Listings</h2>

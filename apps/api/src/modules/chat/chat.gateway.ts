@@ -20,18 +20,29 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:3111',
 ];
 
+const LAN_ORIGIN_RE =
+  /^https?:\/\/(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})(?::\d+)?$/i;
+
+/** Resolved at connection time so env vars loaded by ConfigModule are visible. */
+function getAllowedOrigins(): string[] {
+  const extra = [process.env.ALLOWED_ORIGINS, process.env.APP_URL]
+    .filter(Boolean)
+    .flatMap((v) => v!.split(','))
+    .map((o) => o.trim())
+    .filter(Boolean);
+  return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...extra]));
+}
+
 @WebSocketGateway({
   cors: {
-    origin: Array.from(
-      new Set([
-        ...DEFAULT_ALLOWED_ORIGINS,
-        ...[process.env.ALLOWED_ORIGINS, process.env.APP_URL]
-          .filter(Boolean)
-          .flatMap((value) => value!.split(','))
-          .map((origin) => origin.trim())
-          .filter(Boolean),
-      ]),
-    ),
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return callback(null, true);
+      if (getAllowedOrigins().includes(origin)) return callback(null, true);
+      if (process.env.NODE_ENV !== 'production' && LAN_ORIGIN_RE.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   },
   namespace: '/chat',
@@ -59,6 +70,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = this.jwtService.verify(token);
       client.data.userId = payload.sub;
       this.onlineUsers.set(payload.sub, client.id);
+
+      // Join personal room so this client receives events without being in a conversation room
+      client.join(`user:${payload.sub}`);
 
       // Broadcast online status
       this.server.emit('user_online', { userId: payload.sub });
@@ -88,6 +102,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.join(`conversation:${data.conversationId}`);
     // Mark messages as read
     await this.chatService.markAsRead(data.conversationId, userId);
+    // Tell this client to reset unread count for this conversation
+    client.emit('messages_marked_read', { conversationId: data.conversationId });
   }
 
   @SubscribeMessage('leave_conversation')
@@ -116,8 +132,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.imageUrl,
     );
 
-    // Emit to conversation room
+    // Emit to conversation room (active participants)
     this.server.to(`conversation:${data.conversationId}`).emit('new_message', message);
+
+    // Also emit to the recipient's personal room so their sidebar unread count updates
+    // even if they haven't opened the conversation.
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: data.conversationId },
+      select: { ownerId: true, renterId: true },
+    });
+    if (conversation) {
+      const recipientIds = [conversation.ownerId, conversation.renterId].filter(
+        (id) => id && id !== userId,
+      ) as string[];
+      recipientIds.forEach((recipientId) => {
+        // Use .except() so clients already in the conversation room don't receive
+        // a second copy of the event (they already got it via the room emit above).
+        this.server
+          .to(`user:${recipientId}`)
+          .except(`conversation:${data.conversationId}`)
+          .emit('new_message', message);
+      });
+    }
 
     return message;
   }
@@ -160,6 +196,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       readBy: userId,
       readAt: new Date().toISOString(),
     });
+    // Also tell this client directly in case they're not in the room yet
+    client.emit('messages_marked_read', { conversationId: data.conversationId });
   }
 
   // ─── HELPERS ─────────────────────────────────────

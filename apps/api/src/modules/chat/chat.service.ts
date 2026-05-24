@@ -58,7 +58,7 @@ export class ChatService {
       }
     }
 
-    return conversation;
+    return this.formatConversationForUser(conversation, renterId);
   }
 
   async getUserConversations(userId: string) {
@@ -70,6 +70,18 @@ export class ChatService {
         listing: { select: { id: true, title: true, images: { take: 1 } } },
         owner: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
         renter: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
+        inquiry: {
+          select: {
+            id: true,
+            status: true,
+            source: true,
+            createdAt: true,
+            budgetMin: true,
+            budgetMax: true,
+            preferredAt: true,
+            message: true,
+          },
+        },
         messages: {
           take: 1,
           orderBy: { createdAt: 'desc' },
@@ -89,16 +101,56 @@ export class ChatService {
           },
         });
 
-        return {
-          ...conv,
-          lastMessage: conv.messages[0] || null,
-          unreadCount,
-          otherUser: conv.ownerId === userId ? conv.renter : conv.owner,
-        };
+        return this.formatConversationForUser(conv, userId, unreadCount);
       }),
     );
 
     return withUnread;
+  }
+
+  async getConversationById(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        listing: { select: { id: true, title: true, images: { take: 1 } } },
+        owner: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
+        renter: { select: { id: true, profile: { select: { fullName: true, avatarUrl: true } } } },
+        inquiry: {
+          select: {
+            id: true,
+            status: true,
+            source: true,
+            createdAt: true,
+            budgetMin: true,
+            budgetMax: true,
+            preferredAt: true,
+            message: true,
+          },
+        },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    if (conversation.ownerId !== userId && conversation.renterId !== userId) {
+      throw new ForbiddenException('Not your conversation');
+    }
+
+    const unreadCount = await this.prisma.message.count({
+      where: {
+        conversationId,
+        senderId: { not: userId },
+        isRead: false,
+      },
+    });
+
+    return this.formatConversationForUser(conversation, userId, unreadCount);
   }
 
   async getMessages(conversationId: string, userId: string, cursor?: string, limit = 50) {
@@ -162,5 +214,18 @@ export class ChatService {
     });
 
     return { success: true };
+  }
+
+  private formatConversationForUser(
+    conversation: any,
+    userId: string,
+    unreadCount?: number,
+  ) {
+    return {
+      ...conversation,
+      lastMessage: conversation.messages?.[0] || null,
+      unreadCount: unreadCount ?? 0,
+      otherUser: conversation.ownerId === userId ? conversation.renter : conversation.owner,
+    };
   }
 }

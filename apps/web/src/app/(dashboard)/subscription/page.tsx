@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -140,6 +141,97 @@ export default function SubscriptionPage() {
           {[...Array(3)].map((_, i) => (
             <div key={i} className="h-44 animate-pulse rounded-xl bg-slate-200" />
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (user?.role === 'RENTER') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Grow with Rentage</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Subscription plans are available for Property Owners and Agencies. Upgrade your account to unlock listing tools, analytics, and more.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6">
+          <h2 className="text-base font-semibold text-slate-800">Choose an upgrade path</h2>
+          <p className="mt-1 text-sm text-slate-600">Contact our support team to switch your role and unlock the full power of Rentage.</p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-2xl">🏠</div>
+              <h3 className="mt-3 font-semibold text-slate-900">Become a Property Owner</h3>
+              <p className="mt-1 flex-1 text-sm text-slate-600">
+                List your properties, set pricing, manage bookings, and start earning rental income.
+              </p>
+              <ul className="mt-3 space-y-1 text-xs text-slate-500">
+                <li>✓ Create and publish listings</li>
+                <li>✓ Receive booking requests</li>
+                <li>✓ Track inquiries and revenue</li>
+              </ul>
+              <Link
+                href="/support"
+                className="mt-4 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Request Upgrade
+              </Link>
+            </div>
+
+            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-2xl">🤝</div>
+              <h3 className="mt-3 font-semibold text-slate-900">Work as an Agent</h3>
+              <p className="mt-1 flex-1 text-sm text-slate-600">
+                Connect owners with the right renters, build your client base, and earn on every deal.
+              </p>
+              <ul className="mt-3 space-y-1 text-xs text-slate-500">
+                <li>✓ Access agent-tier plans</li>
+                <li>✓ Manage multiple client listings</li>
+                <li>✓ Priority search visibility</li>
+              </ul>
+              <Link
+                href="/support"
+                className="mt-4 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                Request Upgrade
+              </Link>
+            </div>
+
+            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-2xl">🏢</div>
+              <h3 className="mt-3 font-semibold text-slate-900">Start an Agency</h3>
+              <p className="mt-1 flex-1 text-sm text-slate-600">
+                Scale your real estate business with team management tools and bulk listing capabilities.
+              </p>
+              <ul className="mt-3 space-y-1 text-xs text-slate-500">
+                <li>✓ Manage a team of agents</li>
+                <li>✓ Agency-branded profile page</li>
+                <li>✓ Advanced analytics & reporting</li>
+              </ul>
+              <Link
+                href="/support"
+                className="mt-4 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+              >
+                Request Upgrade
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-sm text-slate-600">
+            Already a renter and want to keep browsing?{' '}
+            <Link href="/listings" className="font-medium text-indigo-600 hover:underline">
+              Browse listings
+            </Link>{' '}
+            or{' '}
+            <Link href="/saved" className="font-medium text-indigo-600 hover:underline">
+              view your saved items
+            </Link>
+            .
+          </p>
         </div>
       </div>
     );

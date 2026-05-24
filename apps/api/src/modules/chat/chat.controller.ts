@@ -26,6 +26,15 @@ export class ChatController {
     return this.chatService.getUserConversations(userId);
   }
 
+  @Get('conversations/:id')
+  @ApiOperation({ summary: 'Get a single conversation detail' })
+  async getConversationById(
+    @Param('id') conversationId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.getConversationById(conversationId, userId);
+  }
+
   @Get('conversations/:id/messages')
   @ApiOperation({ summary: 'Get messages for a conversation' })
   async getMessages(

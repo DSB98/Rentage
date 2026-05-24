@@ -8,6 +8,7 @@ import api from '@/lib/api';
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const isOwner = user?.role === 'OWNER';
+  const isRenter = user?.role === 'RENTER';
 
   const [stats, setStats] = useState({
     myListings: 0,
@@ -144,6 +145,59 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Upgrade CTA for RENTER users */}
+      {isRenter && (
+        <div className="mt-8">
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-6">
+            <h2 className="text-lg font-bold text-slate-900">Want to do more on Rentage?</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Upgrade your account to unlock powerful tools — list properties, manage bookings, and grow your rental business.
+            </p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-2xl">🏠</div>
+                <h3 className="mt-3 font-semibold text-slate-900">Become a Property Owner</h3>
+                <p className="mt-1 flex-1 text-sm text-slate-600">
+                  List your properties, set your own pricing, and start earning rental income on Rentage.
+                </p>
+                <Link
+                  href="/support"
+                  className="mt-4 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
+                  Request Upgrade
+                </Link>
+              </div>
+              <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-2xl">🤝</div>
+                <h3 className="mt-3 font-semibold text-slate-900">Work as an Agent</h3>
+                <p className="mt-1 flex-1 text-sm text-slate-600">
+                  Help owners and renters connect. Build your client base and earn commissions on every successful deal.
+                </p>
+                <Link
+                  href="/support"
+                  className="mt-4 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Request Upgrade
+                </Link>
+              </div>
+              <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-2xl">🏢</div>
+                <h3 className="mt-3 font-semibold text-slate-900">Start an Agency</h3>
+                <p className="mt-1 flex-1 text-sm text-slate-600">
+                  Scale your real estate business. Manage a team, access bulk listing tools, and grow your brand.
+                </p>
+                <Link
+                  href="/support"
+                  className="mt-4 inline-flex items-center justify-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                >
+                  Request Upgrade
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
