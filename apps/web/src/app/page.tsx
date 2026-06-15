@@ -164,33 +164,27 @@ export default function HomePage() {
               </button>
             </form>
 
-            {/* Quick tags */}
+            {/* Quick category tags */}
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {['Homes', 'Cars', 'Bikes', 'PGs', 'Laptops', 'Furniture'].map((term) => (
+              {[
+                { label: 'Homes', slug: 'homes' },
+                { label: 'Cars', slug: 'cars' },
+                { label: 'Bikes', slug: 'bikes' },
+                { label: 'PGs', slug: 'pgs' },
+                { label: 'Laptops', slug: 'electronics' },
+                { label: 'Furniture', slug: 'furniture' },
+              ].map(({ label, slug }) => (
                 <Link
-                  key={term}
-                  href={`/listings?q=${term}`}
+                  key={slug}
+                  href={`/listings?category=${slug}`}
                   className="rounded-full border border-surface-200 bg-white px-3.5 py-1.5 text-xs font-medium text-surface-500 shadow-sm transition-all hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
                 >
-                  {term}
+                  {label}
                 </Link>
               ))}
             </div>
 
-            <div className="mt-8 overflow-hidden rounded-2xl border border-primary-200/70 bg-white/80 p-4 shadow-card">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-primary-900">Browse Fast</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-                {['Homes', 'Flats', 'PGs', 'Cars', 'Bikes', 'Electronics', 'Furniture', 'Appliances'].map((item) => (
-                  <Link
-                    key={item}
-                    href={`/listings?q=${item}`}
-                    className="rounded-lg bg-primary-50 px-3 py-2 text-center text-xs font-semibold text-primary-900 transition-colors hover:bg-primary-100"
-                  >
-                    {item}
-                  </Link>
-                ))}
-              </div>
-            </div>
+
 
           </div>
         </div>
@@ -217,12 +211,12 @@ export default function HomePage() {
             <h2 className="section-heading">Browse by Category</h2>
             <p className="section-subheading">Find exactly what you need from 11 different categories</p>
           </div>
-          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
             {categories.map((cat) => (
               <Link
                 key={cat.id}
                 href={`/listings?category=${cat.slug}`}
-                className={`group flex flex-col items-center gap-3 rounded-2xl bg-gradient-to-br ${CATEGORY_GRADIENTS[cat.slug] || 'from-gray-50 to-gray-100/50'} p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover`}
+                className={`group flex w-[130px] flex-col items-center gap-3 rounded-2xl bg-gradient-to-br ${CATEGORY_GRADIENTS[cat.slug] || 'from-gray-50 to-gray-100/50'} p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover`}
               >
                 <span className="text-4xl transition-transform duration-300 group-hover:scale-110">{CATEGORY_ICONS[cat.slug] || cat.icon || '📦'}</span>
                 <span className="text-sm font-semibold text-slate-700">{cat.name}</span>

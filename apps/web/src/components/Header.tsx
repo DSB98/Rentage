@@ -1,12 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth.store';
 import NotificationBell from './NotificationBell';
 
 export default function Header() {
+  return (
+    <Suspense fallback={null}>
+      <HeaderContent />
+    </Suspense>
+  );
+}
+
+function HeaderContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,7 +61,6 @@ export default function Header() {
     { label: 'Appliances', href: '/listings?category=washing-machines' },
   ];
 
-  const listingTypeLinks = browseCategories.slice(0, 7);
   const activeCategory = (searchParams.get('category') || '').toLowerCase();
 
   const isCategoryLinkActive = (href: string) => {
@@ -85,33 +92,7 @@ export default function Header() {
             </Link>
 
             <nav className="hidden items-center gap-1 md:flex">
-              <div className="group relative">
-                <Link
-                  href="/listings"
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    pathname.startsWith('/listings')
-                      ? 'bg-primary-50 text-primary-800'
-                      : 'text-surface-500 hover:bg-primary-50 hover:text-primary-800'
-                  }`}
-                >
-                  Browse
-                </Link>
-                <div className="invisible absolute left-0 top-full z-50 mt-1 w-[460px] rounded-2xl border border-surface-200 bg-white p-4 opacity-0 shadow-elevated transition-all group-hover:visible group-hover:opacity-100">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-surface-400">Popular Categories</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {browseCategories.map((item) => (
-                      <Link
-                        key={item.label}
-                        href={item.href}
-                        className="rounded-lg bg-surface-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-primary-100 hover:text-primary-900"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {listingTypeLinks.map((item) => (
+              {browseCategories.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

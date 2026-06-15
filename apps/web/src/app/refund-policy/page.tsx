@@ -72,6 +72,8 @@ export default function RefundPolicyPage() {
             'Rentage may modify subscription pricing, features, or plans from time to time with reasonable notice. Such changes will apply to future billing cycles only and will not affect already-paid periods.',
           ],
         },
+        {
+          heading: 'Refund Request Process',
           bullets: [
             'Email refunds@rentage.in within 7 days of the charge with your registered email/phone, plan name, payment date, transaction ID, and reason.',
             'Our team reviews each request within 5–7 working days and may request additional information or evidence.',

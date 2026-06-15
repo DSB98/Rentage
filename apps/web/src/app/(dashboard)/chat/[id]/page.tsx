@@ -119,17 +119,17 @@ export default function ChatDetailPage({ params }: ChatDetailPageProps) {
       return;
     }
 
+    // Always load messages via REST regardless of socket status
+    loadMessages();
+
+    // Connect socket in parallel (non-blocking — messages already load above)
     socketManager
       .connect(token)
       .then(() => {
         socketManager.joinRoom(conversationId);
-        return loadMessages();
       })
       .catch((err) => {
         console.error('Failed to connect chat room:', err);
-        if (active) {
-          setMessagesLoading(false);
-        }
       });
 
     return () => {
@@ -216,13 +216,33 @@ export default function ChatDetailPage({ params }: ChatDetailPageProps) {
   const handleSendMessage = async () => {
     if (!messageText.trim() || sending) return;
 
+    const text = messageText.trim();
+    setMessageText('');
+
+    // Show optimistic message immediately
+    const tempMessage = {
+      id: `temp-${Date.now()}`,
+      conversationId,
+      senderId: user?.id || '',
+      senderName: user?.profile?.fullName || 'You',
+      message: text,
+      isRead: true,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMessage]);
+
     try {
       setSending(true);
       setPageError('');
-      const tempMessage = sendMessage(conversationId, messageText.trim());
-      setMessages((prev) => [...prev, tempMessage]);
-      setMessageText('');
+      const confirmed = await sendMessage(conversationId, text);
+      // Replace optimistic entry with confirmed one from server
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempMessage.id ? confirmed : m))
+      );
     } catch (err: any) {
+      // Rollback optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+      setMessageText(text);
       setPageError(err?.message || 'Failed to send message');
     } finally {
       setSending(false);

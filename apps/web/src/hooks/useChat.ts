@@ -271,44 +271,41 @@ export function useChat() {
     }
   }, [user?.id, user?.profile?.fullName]);
 
-  // Send message (local optimistic update + socket emit)
+  // Send message — REST API (authoritative) + optional socket emit for real-time delivery
   const sendMessage = useCallback(
-    (conversationId: string, message: string, imageUrl?: string) => {
-      try {
-        if (!user?.id) throw new Error('Not authenticated');
+    async (conversationId: string, message: string, imageUrl?: string): Promise<Message> => {
+      if (!user?.id) throw new Error('Not authenticated');
 
-        // Optimistic update
-        const tempMessage: Message = {
-          id: `temp-${Date.now()}`,
-          conversationId,
-          senderId: user.id,
-          senderName: user.profile?.fullName || 'You',
-          message,
-          imageUrl,
-          isRead: true,
-          createdAt: new Date().toISOString(),
-        };
+      // Persist to DB via REST
+      const { data } = await api.post(
+        `/chat/conversations/${conversationId}/messages`,
+        { content: message, imageUrl },
+      );
+      const saved: ApiMessage = data.data ?? data;
+      const confirmedMessage = normalizeMessage(saved, user.profile?.fullName || 'You');
 
-        const existing = messagesRef.current.get(conversationId) || [];
-        messagesRef.current.set(conversationId, [...existing, tempMessage]);
+      // Keep the ref cache aligned with the saved message returned by the API
+      const existing = messagesRef.current.get(conversationId) || [];
+      messagesRef.current.set(
+        conversationId,
+        existing.filter((m) => m.id !== confirmedMessage.id).concat(confirmedMessage),
+      );
 
-        // Emit via socket
+      // Update conversation last message in sidebar
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, lastMessage: message, lastMessageAt: new Date().toISOString() }
+            : c
+        )
+      );
+
+      // Also emit via socket if connected (delivers to other participant in real-time)
+      if (socketManager.isConnected()) {
         socketManager.sendMessage(conversationId, message, imageUrl);
-
-        // Update conversation last message
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === conversationId
-              ? { ...c, lastMessage: message, lastMessageAt: new Date().toISOString() }
-              : c
-          )
-        );
-
-        return tempMessage;
-      } catch (err) {
-        console.error('Failed to send message:', err);
-        throw err;
       }
+
+      return confirmedMessage;
     },
     [user]
   );

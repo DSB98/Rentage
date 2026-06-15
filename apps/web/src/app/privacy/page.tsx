@@ -115,6 +115,7 @@ export default function PrivacyPage() {
           heading: 'Your Rights',
           paragraphs: [
             'Subject to applicable law (including the DPDP Act, 2023), you have the following rights:',
+            'To exercise any right, submit a request through your account settings or write to the Grievance Officer at the contact details below. We may verify your identity before processing any request to protect your data. Requests will be responded to within the timelines prescribed by applicable law. Where a request cannot be fulfilled (e.g., due to legal retention requirements), we will inform you of the reason.',
           ],
           bullets: [
             'Right to access — request a copy of personal data we hold about you.',
@@ -123,9 +124,6 @@ export default function PrivacyPage() {
             'Right to withdraw consent — turn off any consent (e.g., marketing notifications) any time from Settings → Privacy / Notifications. Withdrawing consent does not affect the lawfulness of processing carried out before the withdrawal.',
             'Right to grievance — escalate any concern to our Grievance Officer.',
             'Right to nominate — nominate another individual to exercise rights on your behalf in case of incapacity or death (where supported by law).',
-          ],
-          paragraphs: [
-            'To exercise any right, submit a request through your account settings or write to the Grievance Officer at the contact details below. We may verify your identity before processing any request to protect your data. Requests will be responded to within the timelines prescribed by applicable law. Where a request cannot be fulfilled (e.g., due to legal retention requirements), we will inform you of the reason.',
           ],
         },
         {

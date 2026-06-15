@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -58,6 +58,7 @@ const SORT_OPTIONS = [
 
 function ListingsPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -79,7 +80,8 @@ function ListingsPageContent() {
 
   useEffect(() => {
     api.get('/categories').then(({ data }) => {
-      setCategories(Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : []);
+      const cats = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+      setCategories(cats);
     }).catch(() => {});
   }, []);
 
@@ -97,6 +99,8 @@ function ListingsPageContent() {
   }, [searchParams]);
 
   const fetchListings = useCallback(async (append = false) => {
+    // Wait for categories to load before fetching when a category filter is active
+    if (categoryId && categories.length === 0) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -152,6 +156,7 @@ function ListingsPageContent() {
     setMaxPrice('');
     setRentPeriod('');
     setSort('newest');
+    router.replace('/listings');
   };
 
   const hasActiveFilters = categoryId || city || minPrice || maxPrice || rentPeriod || appliedQuery;
@@ -201,10 +206,21 @@ function ListingsPageContent() {
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400">Category</label>
-                <select value={categoryId} onChange={(e: any) => setCategoryId(e.target.value)} className="select mt-1.5 w-full">
+                <select
+                  value={categoryId}
+                  onChange={(e: any) => {
+                    const slug = e.target.value;
+                    setCategoryId(slug);
+                    const next = new URLSearchParams(searchParams.toString());
+                    if (slug) next.set('category', slug);
+                    else next.delete('category');
+                    router.replace(`/listings?${next}`);
+                  }}
+                  className="select mt-1.5 w-full"
+                >
                   <option value="">All Categories</option>
                   {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.slug}>{cat.name}</option>
                   ))}
                 </select>
               </div>

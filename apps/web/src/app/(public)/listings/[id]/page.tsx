@@ -33,6 +33,12 @@ interface ListingDetail {
   owner: { id: string; profile: { fullName: string; avatarUrl: string | null; city: string | null } };
 }
 
+interface CategorySuggestion {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 const AMENITY_ICONS: Record<string, string> = {
   'Bedrooms': 'M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25',
   'Bathrooms': 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z',
@@ -63,6 +69,17 @@ const PERIOD_LABELS: Record<string, string> = {
   HOURLY: 'hour', DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year',
 };
 
+const formatCurrency = (value: number | string | null | undefined) => Number(value || 0).toLocaleString('en-IN');
+
+const getPrimaryFacts = (listing: ListingDetail) => {
+  const preferredKeys = ['Bedrooms', 'Bathrooms', 'Area (sq.ft)', 'Brand', 'Fuel Type', 'Engine (CC)', 'Capacity', 'Occupancy'];
+  const facts = preferredKeys
+    .map((key) => listing.amenities?.find((amenity) => amenity.key === key))
+    .filter(Boolean) as ListingDetail['amenities'];
+
+  return facts.slice(0, 4);
+};
+
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -88,6 +105,8 @@ export default function ListingDetailPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [similarListings, setSimilarListings] = useState<any[]>([]);
+  const [nearbyListings, setNearbyListings] = useState<any[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [copied, setCopied] = useState(false);
   const [contactInfo, setContactInfo] = useState<{ fullName: string; phone: string | null; email: string | null } | null>(null);
   const [revealingContact, setRevealingContact] = useState(false);
@@ -111,12 +130,25 @@ export default function ListingDetailPage() {
         .then(({ data }) => {
           const l = data.data || data;
           setListing(l);
+          setSimilarListings([]);
+          setNearbyListings([]);
+          setCategorySuggestions([]);
           if (l.category?.id) {
-            api.get(`/listings/search?categoryId=${l.category.id}&nearListingId=${l.id}&excludeId=${l.id}&limit=8`).then(({ data: simData }) => {
+            api.get(`/listings/search?categoryId=${l.category.id}&nearListingId=${l.id}&excludeId=${l.id}&limit=10`).then(({ data: simData }) => {
               const items = (simData.data?.items || simData.items || []).filter((s: any) => s.id !== l.id);
-              setSimilarListings(items.slice(0, 4));
+              setSimilarListings(items.slice(0, 8));
             }).catch(() => {});
           }
+          if (l.city) {
+            api.get(`/listings/search?city=${encodeURIComponent(l.city)}&excludeId=${l.id}&limit=10`).then(({ data: cityData }) => {
+              const items = (cityData.data?.items || cityData.items || []).filter((s: any) => s.id !== l.id && s.category?.id !== l.category?.id);
+              setNearbyListings(items.slice(0, 4));
+            }).catch(() => {});
+          }
+          api.get('/categories').then(({ data: catData }) => {
+            const categories = Array.isArray(catData.data) ? catData.data : Array.isArray(catData) ? catData : [];
+            setCategorySuggestions(categories.filter((cat: CategorySuggestion) => cat.slug !== l.category?.slug).slice(0, 8));
+          }).catch(() => {});
         })
         .catch(() => setListing(null))
         .finally(() => setLoading(false));
@@ -315,12 +347,14 @@ export default function ListingDetailPage() {
   }
 
   const isOwner = user?.id === listing.owner?.id;
+  const primaryFacts = getPrimaryFacts(listing);
+  const periodLabel = PERIOD_LABELS[listing.rentPeriod] || listing.rentPeriod.toLowerCase();
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-surface-50">
       <Header />
 
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 lg:px-6">
         {/* Breadcrumb */}
         <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm text-surface-400">
           <Link href="/" className="shrink-0 transition-colors hover:text-slate-700">Home</Link>
@@ -334,15 +368,46 @@ export default function ListingDetailPage() {
           <span className="min-w-0 truncate text-slate-600">{listing.title}</span>
         </nav>
 
-        <div className="mt-4 grid gap-4 lg:gap-6 lg:grid-cols-5">
+        <section className="mt-4 overflow-hidden rounded-[28px] border border-surface-200 bg-white shadow-sm">
+          <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link href={`/listings?category=${listing.category?.slug}`} className="rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100">
+                  {listing.category?.name}
+                </Link>
+                {listing.isFeatured && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Featured pick</span>}
+                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Available now</span>
+              </div>
+              <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl lg:text-4xl">{listing.title}</h1>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-surface-500">
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                  {listing.city}, {listing.state}
+                </span>
+                <span>Listed {timeAgo(listing.createdAt)}</span>
+                <span>{listing.images.length} photo{listing.images.length === 1 ? '' : 's'}</span>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-950 p-5 text-white shadow-lg">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-200">Rent starts at</p>
+              <div className="mt-2 flex items-end gap-2">
+                <p className="text-4xl font-black">₹{formatCurrency(listing.price)}</p>
+                <p className="pb-1 text-sm text-slate-300">/ {periodLabel}</p>
+              </div>
+              {listing.securityDeposit && <p className="mt-2 text-sm text-slate-300">Security deposit ₹{formatCurrency(listing.securityDeposit)}</p>}
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
           {/* LEFT: Gallery + Details */}
-          <div className="min-w-0 lg:col-span-3 space-y-4">
+          <div className="min-w-0 space-y-5">
             {/* Image Gallery */}
             <div>
               {listing.images.length > 0 ? (
                 <div className="space-y-3">
                   <div
-                    className="group relative cursor-pointer overflow-hidden rounded-2xl bg-surface-100 h-[220px] sm:h-[360px] lg:h-[420px]"
+                    className="group relative h-[260px] cursor-pointer overflow-hidden rounded-[28px] bg-surface-100 sm:h-[430px] lg:h-[520px]"
                     onClick={() => setLightboxOpen(true)}
                   >
                     <img
@@ -392,17 +457,34 @@ export default function ListingDetailPage() {
               )}
             </div>
 
-            {/* Title (mobile) */}
-            <div className="lg:hidden">
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-primary-100 px-3 py-1 text-xs font-semibold text-primary-700">{listing.category?.name}</span>
-                {listing.isFeatured && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>}
+            {(primaryFacts.length > 0 || listing.address) && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {primaryFacts.map((fact) => (
+                  <div key={fact.id} className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-surface-400">{fact.key}</p>
+                    <p className="mt-1 truncate text-lg font-bold text-slate-950">{fact.value}</p>
+                  </div>
+                ))}
+                {listing.address && primaryFacts.length < 4 && (
+                  <div className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-surface-400">Area</p>
+                    <p className="mt-1 truncate text-lg font-bold text-slate-950">{listing.address}</p>
+                  </div>
+                )}
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-slate-900">{listing.title}</h1>
-              <div className="mt-2 flex items-center gap-1.5 text-surface-400">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                <span className="text-sm">{listing.city}, {listing.state}</span>
-              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                ['Verified owner flow', 'Use inquiry, chat, booking, and phone reveal without leaving Rentage.'],
+                ['Location-aware picks', 'Recommendations below prioritize this category and nearby listings.'],
+                ['Plan limits protected', 'Owner listing visibility still respects active subscription rules.'],
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm">
+                  <p className="text-sm font-bold text-slate-900">{title}</p>
+                  <p className="mt-1 text-xs leading-5 text-surface-500">{body}</p>
+                </div>
+              ))}
             </div>
 
             {/* Amenities / Specifications */}
@@ -488,28 +570,38 @@ export default function ListingDetailPage() {
           </div>
 
           {/* RIGHT: Sidebar */}
-          <div className="min-w-0 lg:col-span-2">
-            <div className="sticky top-20 space-y-3 sm:space-y-4">
-              {/* Title (desktop) */}
-              <div className="hidden lg:block">
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-primary-100 px-3 py-1 text-xs font-semibold text-primary-700">{listing.category?.name}</span>
-                  {listing.isFeatured && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>}
-                </div>
-                <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">{listing.title}</h1>
-                <div className="mt-2 flex items-center gap-1.5 text-surface-400">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                  <span className="text-sm">{listing.city}, {listing.state}</span>
+          <div className="min-w-0">
+            <div className="sticky top-20 space-y-4">
+              <div className="card p-4 sm:p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-surface-300">Listing snapshot</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-surface-50 p-3">
+                    <p className="text-xs text-surface-400">Category</p>
+                    <p className="mt-1 font-bold text-slate-900">{listing.category?.name}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 p-3">
+                    <p className="text-xs text-surface-400">Status</p>
+                    <p className="mt-1 font-bold text-green-700">Available</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 p-3">
+                    <p className="text-xs text-surface-400">City</p>
+                    <p className="mt-1 font-bold text-slate-900">{listing.city}</p>
+                  </div>
+                  <div className="rounded-xl bg-surface-50 p-3">
+                    <p className="text-xs text-surface-400">Listed</p>
+                    <p className="mt-1 font-bold text-slate-900">{timeAgo(listing.createdAt)}</p>
+                  </div>
                 </div>
               </div>
 
               {/* Price Card */}
-              <div className="card overflow-hidden">
-                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-4 py-4 sm:px-6 sm:py-5 text-center text-white">
-                  <p className="text-3xl font-bold">₹{listing.price.toLocaleString('en-IN')}</p>
-                  <p className="mt-1 text-sm text-primary-100">per {PERIOD_LABELS[listing.rentPeriod] || listing.rentPeriod.toLowerCase()}</p>
+              <div className="card overflow-hidden border-primary-100 shadow-lg shadow-primary-100/40">
+                <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-primary-800 px-4 py-5 sm:px-6 text-white">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-200">Ready to rent</p>
+                  <p className="mt-2 text-3xl font-black">₹{formatCurrency(listing.price)}</p>
+                  <p className="mt-1 text-sm text-primary-100">per {periodLabel}</p>
                   {listing.securityDeposit && (
-                    <p className="mt-2 text-xs text-primary-200">Security deposit: ₹{listing.securityDeposit.toLocaleString('en-IN')}</p>
+                    <p className="mt-2 text-xs text-primary-200">Security deposit: ₹{formatCurrency(listing.securityDeposit)}</p>
                   )}
                 </div>
                 {!isOwner && (
@@ -653,7 +745,7 @@ export default function ListingDetailPage() {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" /></svg>
                   {copied ? 'Copied!' : 'Share'}
                 </button>
-                <Link href={`/listings?category=${listing.category?.id}`} className="btn-secondary flex-1 py-2.5">
+                <Link href={`/listings?category=${listing.category?.slug}`} className="btn-secondary flex-1 py-2.5">
                   More in {listing.category?.name}
                 </Link>
               </div>
@@ -663,13 +755,14 @@ export default function ListingDetailPage() {
 
         {/* Similar Listings */}
         {similarListings.length > 0 && (
-          <div className="mt-8 sm:mt-16">
+          <section className="mt-10 rounded-[28px] border border-surface-200 bg-white p-4 shadow-sm sm:mt-16 sm:p-6">
             <div className="flex items-end justify-between">
               <div>
-                <h2 className="section-heading">Similar Listings</h2>
-                <p className="section-subheading">More {listing.category?.name?.toLowerCase()} you might like</p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-500">Recommended for you</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Similar {listing.category?.name?.toLowerCase()} nearby</h2>
+                <p className="mt-1 text-sm text-surface-500">Based on this listing&apos;s category and location.</p>
               </div>
-              <Link href={`/listings?category=${listing.category?.id}`} className="btn-secondary hidden sm:inline-flex">
+              <Link href={`/listings?category=${listing.category?.slug}`} className="btn-secondary hidden sm:inline-flex">
                 View All
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
               </Link>
@@ -695,7 +788,68 @@ export default function ListingDetailPage() {
                 />
               ))}
             </div>
-          </div>
+          </section>
+        )}
+
+        {nearbyListings.length > 0 && (
+          <section className="mt-8 rounded-[28px] border border-surface-200 bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-500">Around {listing.city}</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">More rentals near this location</h2>
+                <p className="mt-1 text-sm text-surface-500">Compare nearby options across categories before you book.</p>
+              </div>
+              <Link href={`/listings?city=${encodeURIComponent(listing.city)}`} className="btn-secondary self-start sm:self-auto">
+                View {listing.city}
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+              </Link>
+            </div>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {nearbyListings.map((sl: any) => (
+                <ListingCard
+                  key={sl.id}
+                  id={sl.id}
+                  title={sl.title}
+                  price={sl.price}
+                  rentPeriod={sl.rentPeriod}
+                  city={sl.city}
+                  state={sl.state}
+                  images={sl.images}
+                  imageUrl={sl.images?.[0]?.url}
+                  categoryName={sl.category?.name}
+                  categorySlug={sl.category?.slug}
+                  ownerName={sl.owner?.profile?.fullName}
+                  isFeatured={sl.isFeatured}
+                  createdAt={sl.createdAt}
+                  amenities={sl.amenities}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {categorySuggestions.length > 0 && (
+          <section className="mt-8 overflow-hidden rounded-[28px] border border-surface-200 bg-slate-950 p-4 text-white shadow-sm sm:p-6">
+            <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-center">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-200">Explore more</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight">Other rental categories</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Jump to another department like an e-commerce catalog and compare options quickly.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {categorySuggestions.map((category) => (
+                  <Link
+                    key={category.id}
+                    href={`/listings?category=${category.slug}`}
+                    className="group rounded-2xl border border-white/10 bg-white/5 p-4 transition-all hover:-translate-y-0.5 hover:border-primary-300/40 hover:bg-white/10"
+                  >
+                    <p className="text-sm font-bold text-white">{category.name}</p>
+                    <p className="mt-2 text-xs text-slate-400 group-hover:text-primary-100">Browse available rentals</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
         )}
       </div>
 

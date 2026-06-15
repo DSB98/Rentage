@@ -1,17 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 
-const normalizeLocalApiUrl = (url: string) => {
-  if (url.includes('http://localhost:4100')) {
-    return url.replace('http://localhost:4100', 'http://localhost:4000');
-  }
-
-  return url;
-};
-
-const API_URL = normalizeLocalApiUrl(
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1',
-);
-const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+// Socket.IO connects directly to the API server (port 4000), bypassing the
+// Next.js proxy. We derive the hostname from the current page URL so it
+// automatically works on desktop (localhost:4000) and mobile LAN (192.168.x.x:4000).
+const API_PORT = 4000;
+const SOCKET_URL =
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:${API_PORT}`
+    : 'http://localhost:4000';
 
 class SocketManager {
   private socket: Socket | null = null;

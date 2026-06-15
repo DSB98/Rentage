@@ -129,6 +129,11 @@ export class ListingService {
       where.OR = [
         { title: { contains: params.query } },
         { description: { contains: params.query } },
+        { city: { contains: params.query } },
+        { state: { contains: params.query } },
+        { address: { contains: params.query } },
+        { category: { name: { contains: params.query } } },
+        { category: { slug: { contains: params.query } } },
       ];
     }
 

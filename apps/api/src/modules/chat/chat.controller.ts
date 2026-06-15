@@ -45,4 +45,15 @@ export class ChatController {
   ) {
     return this.chatService.getMessages(conversationId, userId, cursor, limit ? parseInt(limit) : undefined);
   }
+
+  @Post('conversations/:id/messages')
+  @ApiOperation({ summary: 'Send a message in a conversation' })
+  async sendMessage(
+    @Param('id') conversationId: string,
+    @CurrentUser('id') userId: string,
+    @Body('content') content: string,
+    @Body('imageUrl') imageUrl?: string,
+  ) {
+    return this.chatService.sendMessage(conversationId, userId, content, undefined, imageUrl);
+  }
 }

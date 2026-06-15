@@ -590,15 +590,22 @@ async function main() {
     { name: 'Pro', slug: 'pro', description: 'Unlimited access for power users', price: 499, maxListings: -1, maxContactReveals: -1, features: { featured: true, prioritySupport: true }, sortOrder: 3 },
   ];
   let freePlan: any;
+  let proPlan: any;
   for (const plan of plans) {
     const created = await prisma.subscriptionPlan.create({ data: plan });
     if (plan.slug === 'free') freePlan = created;
+    if (plan.slug === 'pro') proPlan = created;
   }
   console.log(`✅ ${plans.length} subscription plans`);
 
-  // Assign free plan to all users
-  const allUsers = [admin, renter, ...owners];
-  for (const u of allUsers) {
+  // Assign Pro plan to demo listing owners (they create many listings),
+  // Free plan to admin and renter (non-listing demo accounts)
+  for (const u of owners) {
+    await prisma.userSubscription.create({
+      data: { userId: u.id, planId: proPlan.id, currentPeriodStart: new Date(), currentPeriodEnd: new Date('2099-12-31') },
+    });
+  }
+  for (const u of [admin, renter]) {
     await prisma.userSubscription.create({
       data: { userId: u.id, planId: freePlan.id, currentPeriodStart: new Date(), currentPeriodEnd: new Date('2099-12-31') },
     });
